@@ -23,7 +23,7 @@ options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) Apple
 driver = webdriver.Chrome(options=options)
 driver.execute_cdp_cmd(
     'Emulation.setTimezoneOverride',
-    {'timezoneId': 'Asia/Bangkok'}  # ตั้ง timezone ที่ต้องการ
+    {'timezoneId': 'Asia/Bangkok'} 
 )
 
 try:
