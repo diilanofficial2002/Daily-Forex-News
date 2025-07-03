@@ -24,8 +24,7 @@ driver = webdriver.Chrome(options=options)
 
 try:
     url = "https://www.forexfactory.com/"
-    driver.get(url)  # เข้าเว็บก่อน เพื่อ set cookie ได้
-    driver.add_cookie({'name': 'timeZone', 'value': '67', 'path': '/', 'domain': 'www.forexfactory.com'})  
+    
     driver.get(url)
     time.sleep(5)
 
