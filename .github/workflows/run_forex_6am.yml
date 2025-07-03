@@ -1,0 +1,33 @@
+name: Run Forex Scraper every weekday at 6AM ICT
+
+on:
+  schedule:
+    # เวลา UTC = 23:00 → 6:00 ICT (UTC+7)
+    - cron: '0 23 * * 1-5'
+
+  workflow_dispatch:  # Optional: allow manual run
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run script
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          TYPHOON_API_KEY: ${{ secrets.TYPHOON_API_KEY }}
+        run: python forex_daily_news.py
