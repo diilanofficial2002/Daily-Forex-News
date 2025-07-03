@@ -11,12 +11,7 @@ jobs:
   run-script:
     runs-on: ubuntu-latest
 
-    steps:
-      - name: Set timezone to Asia/Bangkok
-        run: |
-          sudo ln -sf /usr/share/zoneinfo/Asia/Bangkok /etc/localtime
-          sudo dpkg-reconfigure -f noninteractive tzdata
-          
+    steps:    
       - name: Checkout repo
         uses: actions/checkout@v3
 

@@ -21,6 +21,10 @@ options.add_argument('--no-sandbox')
 options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
 
 driver = webdriver.Chrome(options=options)
+driver.execute_cdp_cmd(
+    'Emulation.setTimezoneOverride',
+    {'timezoneId': 'Asia/Bangkok'}  # ตั้ง timezone ที่ต้องการ
+)
 
 try:
     url = "https://www.forexfactory.com/"
