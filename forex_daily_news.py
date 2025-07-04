@@ -1,4 +1,3 @@
-import os
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
@@ -6,71 +5,46 @@ import requests
 import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-import requests
-import json
-import time
 import openai
+import os
+import json
 
 load_dotenv()
 
-# ตั้งค่า Environment Variable สำหรับ timezone
-os.environ['TZ'] = 'Asia/Bangkok'
-time.tzset()  # สำหรับ Unix/Linux systems
-
-# ตั้งค่า Browser
+# ========== Browser Settings ==========
 options = Options()
 options.add_argument('--headless')
 options.add_argument('--disable-gpu')
 options.add_argument('--no-sandbox')
-options.add_argument('--disable-dev-shm-usage')  # เพิ่มเพื่อป้องกัน memory issues
+options.add_argument("--window-size=1920,1080")
 options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
 
 driver = webdriver.Chrome(options=options)
 
-# ตั้งค่า timezone สำหรับ Chrome
+# --- Set timezone in Chrome DevTools Protocol (only works with Chrome, not Firefox)
 driver.execute_cdp_cmd(
     'Emulation.setTimezoneOverride',
-    {'timezoneId': 'Asia/Bangkok'} 
+    {'timezoneId': 'Asia/Bangkok'}
 )
 
-# เพิ่มการตั้งค่า locale สำหรับ Chrome
-driver.execute_cdp_cmd(
-    'Emulation.setLocaleOverride',
-    {'locale': 'th-TH'}
-)
-
+# ========== Scrape ForexFactory ==========
 try:
     url = "https://www.forexfactory.com/"
-    
     driver.get(url)
     time.sleep(5)
 
-    # ตรวจสอบ timezone ที่ browser ใช้
-    timezone_check = driver.execute_script("return Intl.DateTimeFormat().resolvedOptions().timeZone")
-    print(f"Browser timezone: {timezone_check}")
-    
     soup = BeautifulSoup(driver.page_source, 'html.parser')
-
     table = soup.find("table", class_="calendar__table")
     rows = table.find_all("tr", class_="calendar__row")
-
-    # ใช้ Thailand timezone แทน UTC
-    from zoneinfo import ZoneInfo
-    thailand_tz = ZoneInfo("Asia/Bangkok")
-    today = datetime.now(thailand_tz).strftime("%a")  # เช่น 'Tue' สำหรับวันอังคาร
-    
-    print(f"Today in Thailand: {today}")
 
     extracted = []
     for row in rows:
         time_td = row.find("td", class_="calendar__time")
         time_text = time_td.get_text(strip=True) if time_td else ""
 
-        # บางแถวจะไม่มีเวลา (เช่นเป็นเหตุการณ์ก่อนหน้านี้) → ข้าม
         if not time_text or time_text.lower() == 'all day':
             continue
 
-        # ดึงข้อมูลอื่น
         currency = row.find("td", class_="calendar__currency").get_text(strip=True)
         impact = row.find("td", class_="calendar__impact").get_text(strip=True)
         event = row.find("td", class_="calendar__event").get_text(strip=True)
@@ -82,8 +56,7 @@ try:
 
     keys = ["Time", "Currency", "Impact", "Event", "Actual", "Forecast", "Previous"]
     list_of_dicts = [dict(zip(keys, row)) for row in extracted]
-    print("Success Scrap!")
-
+    print("✅ Success scraping!")
 finally:
     driver.quit()
 

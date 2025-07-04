@@ -2,21 +2,19 @@ name: Run Forex Scraper every weekday at 6AM ICT
 
 on:
   schedule:
-    # เวลา UTC = 23:00 → 6:00 ICT (UTC+7)
+    # UTC เวลา 23:00 = 6:00 ICT
     - cron: '0 23 * * 1-5'
-
-  workflow_dispatch:  # Optional: allow manual run
+  workflow_dispatch:
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
 
-    steps:    
+    steps:
       - name: Set timezone to Asia/Bangkok
         run: |
           sudo ln -sf /usr/share/zoneinfo/Asia/Bangkok /etc/localtime
           sudo dpkg-reconfigure -f noninteractive tzdata
-          echo "TZ=Asia/Bangkok" >> $GITHUB_ENV
 
       - name: Checkout repo
         uses: actions/checkout@v3
@@ -33,7 +31,6 @@ jobs:
 
       - name: Run script
         env:
-          TZ: Asia/Bangkok
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           TYPHOON_API_KEY: ${{ secrets.TYPHOON_API_KEY }}
