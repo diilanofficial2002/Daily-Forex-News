@@ -16,7 +16,8 @@ jobs:
         run: |
           sudo ln -sf /usr/share/zoneinfo/Asia/Bangkok /etc/localtime
           sudo dpkg-reconfigure -f noninteractive tzdata
-          
+          echo "TZ=Asia/Bangkok" >> $GITHUB_ENV
+
       - name: Checkout repo
         uses: actions/checkout@v3
 
@@ -32,6 +33,7 @@ jobs:
 
       - name: Run script
         env:
+          TZ: Asia/Bangkok
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           TYPHOON_API_KEY: ${{ secrets.TYPHOON_API_KEY }}

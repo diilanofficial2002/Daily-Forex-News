@@ -1,3 +1,4 @@
+import os
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
@@ -9,21 +10,33 @@ import requests
 import json
 import time
 import openai
-import os
 
 load_dotenv()
+
+# ตั้งค่า Environment Variable สำหรับ timezone
+os.environ['TZ'] = 'Asia/Bangkok'
+time.tzset()  # สำหรับ Unix/Linux systems
 
 # ตั้งค่า Browser
 options = Options()
 options.add_argument('--headless')
 options.add_argument('--disable-gpu')
 options.add_argument('--no-sandbox')
+options.add_argument('--disable-dev-shm-usage')  # เพิ่มเพื่อป้องกัน memory issues
 options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
 
 driver = webdriver.Chrome(options=options)
+
+# ตั้งค่า timezone สำหรับ Chrome
 driver.execute_cdp_cmd(
     'Emulation.setTimezoneOverride',
     {'timezoneId': 'Asia/Bangkok'} 
+)
+
+# เพิ่มการตั้งค่า locale สำหรับ Chrome
+driver.execute_cdp_cmd(
+    'Emulation.setLocaleOverride',
+    {'locale': 'th-TH'}
 )
 
 try:
@@ -32,12 +45,21 @@ try:
     driver.get(url)
     time.sleep(5)
 
+    # ตรวจสอบ timezone ที่ browser ใช้
+    timezone_check = driver.execute_script("return Intl.DateTimeFormat().resolvedOptions().timeZone")
+    print(f"Browser timezone: {timezone_check}")
+    
     soup = BeautifulSoup(driver.page_source, 'html.parser')
 
     table = soup.find("table", class_="calendar__table")
     rows = table.find_all("tr", class_="calendar__row")
 
-    today = datetime.utcnow().strftime("%a")  # เช่น 'Tue' สำหรับวันอังคาร (UTC)
+    # ใช้ Thailand timezone แทน UTC
+    from zoneinfo import ZoneInfo
+    thailand_tz = ZoneInfo("Asia/Bangkok")
+    today = datetime.now(thailand_tz).strftime("%a")  # เช่น 'Tue' สำหรับวันอังคาร
+    
+    print(f"Today in Thailand: {today}")
 
     extracted = []
     for row in rows:
