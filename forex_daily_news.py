@@ -15,23 +15,29 @@ def scrape_forex_factory():
     """Scrape ForexFactory using Playwright - GitHub Actions optimized"""
     
     with sync_playwright() as p:
-        # Launch persistent context instead of using '--user-data-dir' in args
-        context = p.chromium.launch_persistent_context(
-            user_data_dir="/tmp/chrome-user-data",
+        # Launch browser without user data dir for CI/CD compatibility
+        browser = p.chromium.launch(
             headless=True,
             args=[
-                '--disable-blink-features=AutomationControlled',
-                '--disable-dev-shm-usage',
                 '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--disable-web-security',
                 '--disable-features=VizDisplayCompositor',
+                '--disable-blink-features=AutomationControlled',
                 '--window-size=1920,1080',
                 '--disable-extensions',
                 '--disable-plugins',
                 '--disable-images',
-                '--disable-javascript',
-            ],
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding'
+            ]
+        )
+
+        # Create context with proper settings
+        context = browser.new_context(
             viewport={'width': 1920, 'height': 1080},
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             extra_http_headers={
@@ -43,7 +49,7 @@ def scrape_forex_factory():
             }
         )
 
-        # Use existing context
+        # Set default timeout
         context.set_default_timeout(60000)  # 60 seconds
         page = context.new_page()
 
@@ -209,6 +215,7 @@ def scrape_forex_factory():
         finally:
             try:
                 context.close()
+                browser.close()
             except Exception:
                 pass
 
@@ -298,7 +305,7 @@ def scrape_forex_factory_requests():
         print(f"❌ Requests method failed: {e}")
         return []
 
-# ========== AI and Telegram Functions (unchanged) ==========
+# ========== AI and Telegram Functions ==========
 # Config
 TYPHOON_URL = 'https://api.opentyphoon.ai/v1/chat/completions'
 TYPHOON_KEY = os.getenv("TYPHOON_API_KEY")
