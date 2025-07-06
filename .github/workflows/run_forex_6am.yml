@@ -35,4 +35,4 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           TYPHOON_API_KEY: ${{ secrets.TYPHOON_API_KEY }}
-        run: python forex_daily_news.py
+        run: xvfb-run python forex_daily_news.py
