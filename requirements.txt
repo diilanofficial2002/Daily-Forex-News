@@ -1,6 +1,8 @@
+# Web scraping dependencies
+playwright
 beautifulsoup4
 requests
-python-dotenv
 openai
 python-dotenv
-playwright
+lxml
+retrying

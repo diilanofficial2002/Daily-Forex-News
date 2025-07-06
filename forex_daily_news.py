@@ -12,74 +12,118 @@ load_dotenv()
 
 # ========== Playwright Scraper Function ==========
 def scrape_forex_factory():
-    """Scrape ForexFactory using Playwright"""
+    """Scrape ForexFactory using Playwright - GitHub Actions optimized"""
     
     with sync_playwright() as p:
-        # Launch browser with anti-detection settings
+        # Launch browser with GitHub Actions optimized settings
         browser = p.chromium.launch(
-            headless=False,  # Set to True if you want headless mode
+            headless=True,  # Must be True for CI/CD
             args=[
                 '--disable-blink-features=AutomationControlled',
                 '--disable-dev-shm-usage',
                 '--no-sandbox',
                 '--disable-gpu',
-                '--window-size=1920,1080'
+                '--disable-web-security',
+                '--disable-features=VizDisplayCompositor',
+                '--window-size=1920,1080',
+                '--user-data-dir=/tmp/chrome-user-data',
+                '--disable-extensions',
+                '--disable-plugins',
+                '--disable-images',  # Speed up loading
+                '--disable-javascript',  # Only if site works without JS
             ]
         )
         
         # Create context with realistic settings
         context = browser.new_context(
             viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            extra_http_headers={
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            }
         )
         
+        # Set longer timeout for GitHub Actions
+        context.set_default_timeout(60000)  # 60 seconds
+        
         page = context.new_page()
+        
+        # Set timezone cookie before navigation
+        context.add_cookies([{
+            'name': 'fftimezone',
+            'value': 'Pacific%2FMajuro',
+            'domain': '.forexfactory.com',
+            'path': '/'
+        }])
         
         try:
             print("🔄 Loading ForexFactory with Playwright...")
             
-            # Navigate to ForexFactory
-            page.goto("https://www.forexfactory.com/", wait_until="networkidle")
+            # Try multiple approaches for better reliability
+            retry_count = 0
+            max_retries = 3
             
-            # Wait for potential Cloudflare challenge
-            print("⏳ Waiting for page to load completely...")
-            page.wait_for_timeout(10000)  # 10 seconds
+            while retry_count < max_retries:
+                try:
+                    # Navigate to ForexFactory with longer timeout
+                    page.goto(
+                        "https://www.forexfactory.com/", 
+                        wait_until="domcontentloaded",  # Changed from networkidle
+                        timeout=60000  # 60 seconds
+                    )
+                    
+                    # Wait for page to stabilize
+                    print("⏳ Waiting for page to load completely...")
+                    page.wait_for_timeout(15000)  # 15 seconds
+                    
+                    # Check if we're blocked by Cloudflare
+                    page_content = page.content()
+                    if "Verifying you are human" in page_content or "Cloudflare" in page_content:
+                        print(f"❌ Blocked by Cloudflare (attempt {retry_count + 1})")
+                        retry_count += 1
+                        if retry_count < max_retries:
+                            print("🔄 Retrying in 10 seconds...")
+                            time.sleep(10)
+                            continue
+                        else:
+                            print("❌ Max retries reached for Cloudflare bypass")
+                            return []
+                    
+                    # Success - break out of retry loop
+                    break
+                    
+                except Exception as e:
+                    print(f"❌ Navigation error (attempt {retry_count + 1}): {e}")
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        print("🔄 Retrying in 10 seconds...")
+                        time.sleep(10)
+                        continue
+                    else:
+                        print("❌ Max retries reached for navigation")
+                        return []
             
-            # Check if we're blocked by Cloudflare
-            if "Verifying you are human" in page.content():
-                print("❌ Blocked by Cloudflare, waiting longer...")
-                page.wait_for_timeout(20000)  # Wait 20 more seconds
-                
-                if "Verifying you are human" in page.content():
-                    print("❌ Still blocked by Cloudflare")
-                    return []
-            
-            # Wait for calendar table to load
+            # Wait for calendar table to load with multiple selectors
+            print("⏳ Waiting for calendar table...")
             try:
-                page.wait_for_selector(".calendar__table", timeout=30000)
+                # Try different selectors
+                page.wait_for_selector(
+                    ".calendar__table, table.calendar, .calendar-table, [class*='calendar']",
+                    timeout=30000
+                )
                 print("✅ Calendar table found!")
             except:
-                print("⚠️ Calendar table not found immediately, trying anyway...")
-            
-            # Set timezone cookie
-            context.add_cookies([{
-                'name': 'fftimezone',
-                'value': 'Pacific%2FMajuro',  # Same as your original
-                'domain': '.forexfactory.com',
-                'path': '/'
-            }])
-            
-            # Reload page to apply cookie
-            print("🔄 Reloading page with timezone cookie...")
-            page.reload(wait_until="networkidle")
-            page.wait_for_timeout(5000)
-            
-            # Wait for calendar table again
-            try:
-                page.wait_for_selector(".calendar__table", timeout=15000)
-                print("✅ Calendar table loaded with timezone!")
-            except:
-                print("⚠️ Calendar table not found after reload")
+                print("⚠️ Calendar table not found with primary selector, trying alternative...")
+                try:
+                    # Try waiting for any table
+                    page.wait_for_selector("table", timeout=15000)
+                    print("✅ Found table element!")
+                except:
+                    print("⚠️ No table found, proceeding with HTML parsing...")
             
             # Get page content
             html_content = page.content()
@@ -87,52 +131,140 @@ def scrape_forex_factory():
             # Parse with BeautifulSoup
             soup = BeautifulSoup(html_content, 'html.parser')
             
-            print("========== Raw HTML Preview ==========")
-            print(soup.prettify()[:3000])
+            # Debug: Check if page loaded properly
+            print(f"📄 Page title: {soup.title.string if soup.title else 'No title'}")
+            print(f"📄 Page content length: {len(html_content)}")
             
-            # Extract calendar data
-            table = soup.find("table", class_="calendar__table")
+            # Try multiple table selectors
+            table = None
+            table_selectors = [
+                "table.calendar__table",
+                ".calendar__table",
+                "table[class*='calendar']",
+                "table",  # Fallback
+            ]
+            
+            for selector in table_selectors:
+                if selector == "table":
+                    # For fallback, find all tables and look for calendar-like content
+                    tables = soup.find_all("table")
+                    for t in tables:
+                        if any(word in str(t).lower() for word in ['calendar', 'time', 'currency', 'event']):
+                            table = t
+                            break
+                else:
+                    table = soup.select_one(selector)
+                
+                if table:
+                    print(f"✅ Found table using selector: {selector}")
+                    break
             
             if not table:
                 print("❌ Calendar table not found in HTML")
+                # Debug: Print page structure
+                print("🔍 Available table classes:")
+                for t in soup.find_all("table"):
+                    print(f"  - {t.get('class', 'No class')}")
                 return []
             
-            rows = table.find_all("tr", class_="calendar__row")
+            # Find calendar rows with multiple approaches
+            rows = []
+            row_selectors = [
+                "tr.calendar__row",
+                "tr[class*='calendar']",
+                "tr",  # Fallback
+            ]
+            
+            for selector in row_selectors:
+                if selector == "tr":
+                    # For fallback, find all rows in the table
+                    rows = table.find_all("tr")
+                else:
+                    rows = table.select(selector)
+                
+                if rows:
+                    print(f"✅ Found {len(rows)} rows using selector: {selector}")
+                    break
             
             if not rows:
                 print("❌ No calendar rows found")
                 return []
             
-            print(f"📊 Found {len(rows)} calendar rows")
+            print(f"📊 Processing {len(rows)} calendar rows")
             
             extracted = []
-            for row in rows:
+            for i, row in enumerate(rows):
                 try:
-                    time_td = row.find("td", class_="calendar__time")
-                    time_text = time_td.get_text(strip=True) if time_td else ""
+                    # More flexible cell extraction
+                    cells = row.find_all(['td', 'th'])
                     
-                    if not time_text or time_text.lower() == 'all day':
+                    if len(cells) < 6:  # Skip header rows or incomplete rows
                         continue
                     
-                    # Safe extraction to avoid AttributeError
-                    currency_td = row.find("td", class_="calendar__currency")
-                    impact_td = row.find("td", class_="calendar__impact")
-                    event_td = row.find("td", class_="calendar__event")
-                    actual_td = row.find("td", class_="calendar__actual")
-                    forecast_td = row.find("td", class_="calendar__forecast")
-                    previous_td = row.find("td", class_="calendar__previous")
+                    # Extract data with multiple approaches
+                    time_text = ""
+                    currency = ""
+                    impact = ""
+                    event = ""
+                    actual = ""
+                    forecast = ""
+                    previous = ""
                     
-                    currency = currency_td.get_text(strip=True) if currency_td else ""
-                    impact = impact_td.get_text(strip=True) if impact_td else ""
-                    event = event_td.get_text(strip=True) if event_td else ""
-                    actual = actual_td.get_text(strip=True) if actual_td else ""
-                    forecast = forecast_td.get_text(strip=True) if forecast_td else ""
-                    previous = previous_td.get_text(strip=True) if previous_td else ""
+                    # Try specific classes first
+                    time_td = row.find("td", class_=lambda x: x and 'time' in x.lower())
+                    if time_td:
+                        time_text = time_td.get_text(strip=True)
+                    elif len(cells) > 0:
+                        time_text = cells[0].get_text(strip=True)
+                    
+                    currency_td = row.find("td", class_=lambda x: x and 'currency' in x.lower())
+                    if currency_td:
+                        currency = currency_td.get_text(strip=True)
+                    elif len(cells) > 1:
+                        currency = cells[1].get_text(strip=True)
+                    
+                    impact_td = row.find("td", class_=lambda x: x and 'impact' in x.lower())
+                    if impact_td:
+                        impact = impact_td.get_text(strip=True)
+                    elif len(cells) > 2:
+                        impact = cells[2].get_text(strip=True)
+                    
+                    event_td = row.find("td", class_=lambda x: x and 'event' in x.lower())
+                    if event_td:
+                        event = event_td.get_text(strip=True)
+                    elif len(cells) > 3:
+                        event = cells[3].get_text(strip=True)
+                    
+                    actual_td = row.find("td", class_=lambda x: x and 'actual' in x.lower())
+                    if actual_td:
+                        actual = actual_td.get_text(strip=True)
+                    elif len(cells) > 4:
+                        actual = cells[4].get_text(strip=True)
+                    
+                    forecast_td = row.find("td", class_=lambda x: x and 'forecast' in x.lower())
+                    if forecast_td:
+                        forecast = forecast_td.get_text(strip=True)
+                    elif len(cells) > 5:
+                        forecast = cells[5].get_text(strip=True)
+                    
+                    previous_td = row.find("td", class_=lambda x: x and 'previous' in x.lower())
+                    if previous_td:
+                        previous = previous_td.get_text(strip=True)
+                    elif len(cells) > 6:
+                        previous = cells[6].get_text(strip=True)
+                    
+                    # Skip rows without time or with "all day"
+                    if not time_text or time_text.lower() in ['all day', 'time', '']:
+                        continue
+                    
+                    # Skip if no meaningful content
+                    if not any([currency, event, actual, forecast, previous]):
+                        continue
                     
                     extracted.append([time_text, currency, impact, event, actual, forecast, previous])
                     
                 except Exception as e:
-                    print(f"⚠️ Error extracting row: {e}")
+                    print(f"⚠️ Error extracting row {i}: {e}")
                     continue
             
             keys = ["Time", "Currency", "Impact", "Event", "Actual", "Forecast", "Previous"]
@@ -140,14 +272,110 @@ def scrape_forex_factory():
             
             print(f"✅ Successfully extracted {len(list_of_dicts)} events!")
             
+            # Debug: Show first few extracted events
+            if list_of_dicts:
+                print("📋 First extracted event:")
+                print(json.dumps(list_of_dicts[0], indent=2))
+            
             return list_of_dicts
             
         except Exception as e:
             print(f"❌ Error during scraping: {e}")
+            import traceback
+            traceback.print_exc()
             return []
             
         finally:
-            browser.close()
+            try:
+                browser.close()
+            except:
+                pass
+
+# ========== Alternative Scraper using requests + BeautifulSoup ==========
+def scrape_forex_factory_requests():
+    """Fallback scraper using requests + BeautifulSoup"""
+    
+    print("🔄 Trying fallback scraper with requests...")
+    
+    session = requests.Session()
+    
+    # Set headers to mimic real browser
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+    }
+    
+    session.headers.update(headers)
+    
+    # Set timezone cookie
+    session.cookies.set('fftimezone', 'Pacific%2FMajuro', domain='.forexfactory.com')
+    
+    try:
+        # Make request with longer timeout
+        response = session.get('https://www.forexfactory.com/', timeout=30)
+        response.raise_for_status()
+        
+        # Parse with BeautifulSoup
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Check if blocked
+        if "Verifying you are human" in response.text or "Cloudflare" in response.text:
+            print("❌ Blocked by Cloudflare in requests method")
+            return []
+        
+        # Find calendar table
+        table = soup.find("table", class_="calendar__table")
+        if not table:
+            # Try alternative selectors
+            table = soup.find("table", class_=lambda x: x and 'calendar' in x.lower())
+        
+        if not table:
+            print("❌ No calendar table found in requests method")
+            return []
+        
+        # Extract rows similar to Playwright method
+        rows = table.find_all("tr")
+        
+        extracted = []
+        for row in rows:
+            try:
+                cells = row.find_all(['td', 'th'])
+                
+                if len(cells) < 6:
+                    continue
+                
+                time_text = cells[0].get_text(strip=True) if len(cells) > 0 else ""
+                currency = cells[1].get_text(strip=True) if len(cells) > 1 else ""
+                impact = cells[2].get_text(strip=True) if len(cells) > 2 else ""
+                event = cells[3].get_text(strip=True) if len(cells) > 3 else ""
+                actual = cells[4].get_text(strip=True) if len(cells) > 4 else ""
+                forecast = cells[5].get_text(strip=True) if len(cells) > 5 else ""
+                previous = cells[6].get_text(strip=True) if len(cells) > 6 else ""
+                
+                if not time_text or time_text.lower() in ['all day', 'time', '']:
+                    continue
+                
+                if not any([currency, event, actual, forecast, previous]):
+                    continue
+                
+                extracted.append([time_text, currency, impact, event, actual, forecast, previous])
+                
+            except Exception as e:
+                continue
+        
+        keys = ["Time", "Currency", "Impact", "Event", "Actual", "Forecast", "Previous"]
+        list_of_dicts = [dict(zip(keys, row)) for row in extracted]
+        
+        print(f"✅ Requests method extracted {len(list_of_dicts)} events!")
+        return list_of_dicts
+        
+    except Exception as e:
+        print(f"❌ Requests method failed: {e}")
+        return []
 
 # ========== AI and Telegram Functions (unchanged) ==========
 # Config
@@ -259,13 +487,18 @@ if __name__ == '__main__':
     # Send initial message
     send_update_message_thai_time()
     
-    # Scrape data
+    # Try Playwright first, then fallback to requests
     print("📡 Scraping ForexFactory...")
     list_of_dicts = scrape_forex_factory()
     
+    # If Playwright fails, try requests method
     if not list_of_dicts:
-        print("❌ No data scraped, exiting...")
-        send_telegram_message("❌ Failed to scrape ForexFactory data")
+        print("🔄 Playwright failed, trying requests method...")
+        list_of_dicts = scrape_forex_factory_requests()
+    
+    if not list_of_dicts:
+        print("❌ Both scraping methods failed, exiting...")
+        send_telegram_message("❌ Failed to scrape ForexFactory data using both methods")
         exit(1)
     
     print(f"📊 Scraped {len(list_of_dicts)} events")
