@@ -32,7 +32,7 @@ def scrape_forex_factory():
                 '--disable-images',
                 '--disable-background-timer-throttling',
                 '--disable-backgrounding-occluded-windows',
-                '--disable-renderer-backgrounding'
+                '--disable-renderer-backgrounding',
             ]
         )
 
