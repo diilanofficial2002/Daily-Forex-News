@@ -56,7 +56,7 @@ def scrape_forex_factory():
         # Set timezone cookie before navigation
         context.add_cookies([{
             'name': 'fftimezone',
-            'value': 'Pacific%2FMajuro',
+            'value': 'Asia%2FNovosibirsk',
             'domain': '.forexfactory.com',
             'path': '/'
         }])
