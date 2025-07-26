@@ -1,230 +1,48 @@
-name: ForexFactory News Scraper
+# ชื่อของ Workflow ที่จะแสดงในหน้า Actions ของ GitHub
+name: Run Daily Forex Analysis
 
+# ตั้งค่าการเรียกใช้งาน (Trigger)
 on:
+  workflow_dispatch: # อนุญาตให้เรากดรันเองได้เพื่อทดสอบ
   schedule:
-    - cron: '0 23 * * 0-4'  # Runs at 6:00 AM Thailand time (UTC+7) Monday–Friday
+    # รันทุกวัน เวลา 23:00 UTC ซึ่งเท่ากับ 6:00 น. ตามเวลาประเทศไทย (UTC+7)
+    - cron: '0 23 * * *'
 
-  # Allow manual trigger
-  workflow_dispatch:
-    inputs:
-      debug_mode:
-        description: 'Enable debug mode'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'true'
-          - 'false'
-  
-  # Trigger on push to main branch (for testing)
-  push:
-    branches: [ main ]
-    paths:
-      - '**.py'
-      - '.github/workflows/**.yml'
-
+# กำหนดงานที่จะต้องทำ
 jobs:
-  scrape-forex-news:
+  build-and-run:
+    # เลือกระบบปฏิบัติการที่จะใช้รัน
     runs-on: ubuntu-latest
-    
-    # Set timeout for the entire job (30 minutes)
-    timeout-minutes: 30
-    
-    # Define environment variables
-    env:
-      PYTHONUNBUFFERED: 1
-      DISPLAY: :99
-      DEBIAN_FRONTEND: noninteractive
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-        cache: 'pip'
-    
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-            xvfb \
-            libnss3 \
-            libnspr4 \
-            libdbus-1-3 \
-            libatk1.0-0 \
-            libatk-bridge2.0-0 \
-            libcups2 \
-            libdrm2 \
-            libxss1 \
-            libxcomposite1 \
-            libxdamage1 \
-            libxrandr2 \
-            libgbm1 \
-            libxkbcommon0 \
-            fonts-noto-color-emoji \
-            fonts-noto-cjk \
-            fonts-liberation \
-            fonts-dejavu-core \
-            fontconfig
 
-        sudo apt-get install -y libasound2t64 || sudo apt-get install -y libasound2
-    
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-    
-    - name: Install Playwright browsers
-      run: |
-        playwright install chromium
-        playwright install-deps chromium
-    
-    - name: Create .env file
-      run: |
-        echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" > .env
-        echo "CHAT_ID=${{ secrets.CHAT_ID }}" >> .env
-        echo "TYPHOON_API_KEY=${{ secrets.TYPHOON_API_KEY }}" >> .env
-    
-    - name: Verify environment setup
-      run: |
-        echo "Python version: $(python --version)"
-        echo "Pip version: $(pip --version)"
-        echo "Playwright version: $(playwright --version)"
-        echo "Chrome version: $(chromium --version 2>/dev/null || echo 'Chrome not found')"
-        echo "Display: $DISPLAY"
-        echo "Available fonts:"
-        fc-list | head -10
-    
-    - name: Test network connectivity
-      run: |
-        echo "Testing network connectivity..."
-        ping -c 3 google.com || echo "Google ping failed"
-        ping -c 3 forexfactory.com || echo "ForexFactory ping failed"
-        curl -I https://forexfactory.com || echo "ForexFactory curl failed"
-    
-    - name: Start virtual display
-      run: |
-        Xvfb :99 -screen 0 1920x1080x24 &
-        sleep 3
-        echo "DISPLAY=:99" >> $GITHUB_ENV
-    
-    - name: Run ForexFactory scraper
-      timeout-minutes: 20
-      run: |
-        if [ "${{ github.event.inputs.debug_mode }}" = "true" ]; then
-          echo "Running in debug mode..."
-          python -u forex_daily_news.py --debug
-        else
-          python -u forex_daily_news.py
-        fi
-      env:
-        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        CHAT_ID: ${{ secrets.CHAT_ID }}
-        TYPHOON_API_KEY: ${{ secrets.TYPHOON_API_KEY }}
-    
-    - name: Upload logs on failure
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: scraper-logs-${{ github.run_number }}
-        path: |
-          *.log
-          /tmp/chrome-user-data/
-        retention-days: 7
-    
-    - name: Send failure notification
-      if: failure()
-      run: |
-        curl -X POST "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage" \
-          -d chat_id="${{ secrets.CHAT_ID }}" \
-          -d text="❌ ForexFactory scraper failed on GitHub Actions
-        
-        Run: ${{ github.run_number }}
-        Branch: ${{ github.ref_name }}
-        Commit: ${{ github.sha }}
-        
-        Check logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-    
-    - name: Send success notification
-      if: success()
-      run: |
-        curl -X POST "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage" \
-          -d chat_id="${{ secrets.CHAT_ID }}" \
-          -d text="✅ ForexFactory scraper completed successfully
-        
-        Run: ${{ github.run_number }}
-        Branch: ${{ github.ref_name }}
-        Time: $(date -u)"
-
-  # Health check job to verify dependencies
-  health-check:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    
+    # ขั้นตอนการทำงานทั้งหมด
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-    
-    - name: Install dependencies
-      run: |
-        pip install requests python-dotenv
-    
-    - name: Test API endpoints
-      run: |
-        python -c "
-        import requests
-        import os
-        
-        # Test Telegram API
-        bot_token = '${{ secrets.BOT_TOKEN }}'
-        chat_id = '${{ secrets.CHAT_ID }}'
-        
-        try:
-            response = requests.get(f'https://api.telegram.org/bot{bot_token}/getMe', timeout=10)
-            if response.status_code == 200:
-                print('✅ Telegram API is working')
-            else:
-                print(f'❌ Telegram API error: {response.status_code}')
-        except Exception as e:
-            print(f'❌ Telegram API error: {e}')
-        
-        # Test Typhoon API
-        typhoon_key = '${{ secrets.TYPHOON_API_KEY }}'
-        
-        try:
-            headers = {'Authorization': f'Bearer {typhoon_key}'}
-            response = requests.get('https://api.opentyphoon.ai/v1/models', headers=headers, timeout=10)
-            if response.status_code == 200:
-                print('✅ Typhoon API is working')
-            else:
-                print(f'❌ Typhoon API error: {response.status_code}')
-        except Exception as e:
-            print(f'❌ Typhoon API error: {e}')
-        
-        # Test ForexFactory accessibility
-        try:
-            response = requests.get('https://forexfactory.com', timeout=15)
-            if response.status_code == 200:
-                print('✅ ForexFactory is accessible')
-            else:
-                print(f'❌ ForexFactory error: {response.status_code}')
-        except Exception as e:
-            print(f'❌ ForexFactory error: {e}')
-        "
-    
-    - name: Send health check report
-      run: |
-        curl -X POST "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage" \
-          -d chat_id="${{ secrets.CHAT_ID }}" \
-          -d text="🔍 Health check completed at $(date -u)
-        
-        All systems status checked.
-        Next scheduled run: See workflow schedule."
+      # 1. เช็คเอาท์โค้ดของเราจาก Repository
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      # 2. ตั้งค่าสภาพแวดล้อม Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9' # เลือกรุ่น Python ที่เสถียร
+
+      # 3. ติดตั้ง Dependencies ของ Playwright (สำคัญมาก!)
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      # 4. ติดตั้ง Python Dependencies ทั้งหมด
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -U git+https://github.com/iqoptionapi/iqoptionapi.git@7.1.1
+
+      # 5. รันสคริปต์หลักของเรา!
+      - name: Run Forex Analysis Script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          IQ_USER: ${{ secrets.IQ_USER }}
+          IQ_PASS: ${{ secrets.IQ_PASS }}
+        run: python forex_daily_news.py

@@ -1,8 +1,15 @@
-# Web scraping dependencies
+# --- Web Scraping & Data Handling ---
 playwright
 beautifulsoup4
-requests
-openai
-python-dotenv
 lxml
-retrying
+requests
+pandas
+pandas-ta
+numpy==1.26.4
+
+# --- AI & Environment ---
+google-generativeai
+python-dotenv
+
+# --- IQ Option API Dependency ---
+websocket-client==0.56.0

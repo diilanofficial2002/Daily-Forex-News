@@ -1,461 +1,274 @@
+# ========== Import Libraries ==========
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 import requests
 import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-import openai
+import google.generativeai as genai
 import os
 import json
 
+from get_data import IQDataFetcher
+
 load_dotenv()
 
-# ========== Playwright Scraper Function ==========
+# ========== Forex Factory Scrapers ==========
 def scrape_forex_factory():
     """Scrape ForexFactory using Playwright - GitHub Actions optimized"""
     
     with sync_playwright() as p:
-        # Launch browser without user data dir for CI/CD compatibility
         browser = p.chromium.launch(
             headless=True,
-            args=[
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--disable-web-security',
-                '--disable-features=VizDisplayCompositor',
-                '--disable-blink-features=AutomationControlled',
-                '--window-size=1920,1080',
-                '--disable-extensions',
-                '--disable-plugins',
-                '--disable-images',
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-renderer-backgrounding',
-            ]
+            args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
         )
-
-        # Create context with proper settings
         context = browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            extra_http_headers={
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-            }
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         )
-
-        # Set default timeout
-        context.set_default_timeout(60000)  # 60 seconds
         page = context.new_page()
 
-        # Set timezone cookie before navigation
-        context.add_cookies([{
-            'name': 'fftimezone',
-            'value': 'Asia%2FNovosibirsk',
-            'domain': '.forexfactory.com',
-            'path': '/'
-        }])
+        # ตั้งค่า Timezone ก่อนเข้าเว็บ
+        context.add_cookies([{'name': 'fftimezone', 'value': 'Asia%2FNovosibirsk', 'domain': '.forexfactory.com', 'path': '/'}])
 
         try:
             print("🔄 Loading ForexFactory with Playwright...")
-            retry_count = 0
-            max_retries = 3
-
-            while retry_count < max_retries:
-                try:
-                    page.goto("https://www.forexfactory.com/", wait_until="domcontentloaded", timeout=60000)
-                    print("⏳ Waiting for page to load completely...")
-                    page.wait_for_timeout(15000)
-
-                    page_content = page.content()
-                    if "Verifying you are human" in page_content or "Cloudflare" in page_content:
-                        print(f"❌ Blocked by Cloudflare (attempt {retry_count + 1})")
-                        retry_count += 1
-                        if retry_count < max_retries:
-                            print("🔄 Retrying in 10 seconds...")
-                            time.sleep(10)
-                            continue
-                        else:
-                            print("❌ Max retries reached for Cloudflare bypass")
-                            return []
-                    break
-
-                except Exception as e:
-                    print(f"❌ Navigation error (attempt {retry_count + 1}): {e}")
-                    retry_count += 1
-                    if retry_count < max_retries:
-                        print("🔄 Retrying in 10 seconds...")
-                        time.sleep(10)
-                        continue
-                    else:
-                        print("❌ Max retries reached for navigation")
-                        return []
-
-            print("⏳ Waiting for calendar table...")
-            try:
-                page.wait_for_selector(
-                    ".calendar__table, table.calendar, .calendar-table, [class*='calendar']",
-                    timeout=30000
-                )
-                print("✅ Calendar table found!")
-            except:
-                print("⚠️ Calendar table not found with primary selector, trying alternative...")
-                try:
-                    page.wait_for_selector("table", timeout=15000)
-                    print("✅ Found table element!")
-                except:
-                    print("⚠️ No table found, proceeding with HTML parsing...")
+            page.goto("https://www.forexfactory.com/", wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_timeout(10000) # รอให้หน้าเว็บโหลดสมบูรณ์
 
             html_content = page.content()
-            soup = BeautifulSoup(html_content, 'html.parser')
-            print(f"📄 Page title: {soup.title.string if soup.title else 'No title'}")
-            print(f"📄 Page content length: {len(html_content)}")
-
-            table = None
-            table_selectors = [
-                "table.calendar__table",
-                ".calendar__table",
-                "table[class*='calendar']",
-                "table",
-            ]
-
-            for selector in table_selectors:
-                if selector == "table":
-                    tables = soup.find_all("table")
-                    for t in tables:
-                        if any(word in str(t).lower() for word in ['calendar', 'time', 'currency', 'event']):
-                            table = t
-                            break
-                else:
-                    table = soup.select_one(selector)
-
-                if table:
-                    print(f"✅ Found table using selector: {selector}")
-                    break
-
+            soup = BeautifulSoup(html_content, 'lxml')
+            
+            table = soup.select_one("table.calendar__table")
             if not table:
-                print("❌ Calendar table not found in HTML")
-                print("🔍 Available table classes:")
-                for t in soup.find_all("table"):
-                    print(f"  - {t.get('class', 'No class')}")
+                print("❌ Calendar table not found in Playwright HTML")
                 return []
 
-            row_selectors = [
-                "tr.calendar__row",
-                "tr[class*='calendar']",
-                "tr",
-            ]
-            rows = []
-
-            for selector in row_selectors:
-                if selector == "tr":
-                    rows = table.find_all("tr")
-                else:
-                    rows = table.select(selector)
-
-                if rows:
-                    print(f"✅ Found {len(rows)} rows using selector: {selector}")
-                    break
-
-            if not rows:
-                print("❌ No calendar rows found")
-                return []
-
-            print(f"📊 Processing {len(rows)} calendar rows")
+            rows = table.select("tr.calendar__row")
             extracted = []
-
-            for i, row in enumerate(rows):
-                try:
-                    cells = row.find_all(['td', 'th'])
-                    if len(cells) < 6:
-                        continue
-
-                    time_text = cells[0].get_text(strip=True)
-                    currency = cells[1].get_text(strip=True)
-                    impact = cells[2].get_text(strip=True)
-                    event = cells[3].get_text(strip=True)
-                    actual = cells[4].get_text(strip=True)
-                    forecast = cells[5].get_text(strip=True)
-                    previous = cells[6].get_text(strip=True) if len(cells) > 6 else ""
-
-                    if not time_text or time_text.lower() in ['all day', 'time', '']:
-                        continue
-
-                    if not any([currency, event, actual, forecast, previous]):
-                        continue
-
-                    extracted.append([time_text, currency, impact, event, actual, forecast, previous])
-
-                except Exception as e:
-                    print(f"⚠️ Error extracting row {i}: {e}")
-                    continue
-
             keys = ["Time", "Currency", "Impact", "Event", "Actual", "Forecast", "Previous"]
-            list_of_dicts = [dict(zip(keys, row)) for row in extracted]
 
-            print(f"✅ Successfully extracted {len(list_of_dicts)} events!")
+            for row in rows:
+                cells = row.find_all('td')
+                if len(cells) < 6: continue
+                
+                # ดึงข้อมูลจากแต่ละ cell
+                row_data = [cell.get_text(strip=True) for cell in cells]
+                
+                # จัดการกับข้อมูลที่ไม่สมบูรณ์
+                full_row_data = row_data[:7] + [""] * (7 - len(row_data))
 
-            if list_of_dicts:
-                print("📋 First extracted event:")
-                print(json.dumps(list_of_dicts[0], indent=2))
+                if not full_row_data[0] or full_row_data[0].lower() in ['all day', 'time', '']: continue
+                if not any(full_row_data[1:4]): continue
+                
+                extracted.append(dict(zip(keys, full_row_data)))
 
-            return list_of_dicts
+            print(f"✅ Playwright extracted {len(extracted)} events!")
+            return extracted
 
         except Exception as e:
-            print(f"❌ Error during scraping: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"❌ Error during Playwright scraping: {e}")
             return []
-
         finally:
-            try:
-                context.close()
-                browser.close()
-            except Exception:
-                pass
+            browser.close()
 
-# ========== Alternative Scraper using requests + BeautifulSoup ==========
 def scrape_forex_factory_requests():
     """Fallback scraper using requests + BeautifulSoup"""
-    
     print("🔄 Trying fallback scraper with requests...")
-    
-    session = requests.Session()
-    
-    # Set headers to mimic real browser
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-    }
-    
-    session.headers.update(headers)
-    
-    # Set timezone cookie
-    session.cookies.set('fftimezone', 'Pacific%2FMajuro', domain='.forexfactory.com')
-    
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36'}
+    cookies = {'fftimezone': 'Asia%2FNovosibirsk'}
     try:
-        # Make request with longer timeout
-        response = session.get('https://www.forexfactory.com/', timeout=30)
+        response = requests.get('https://www.forexfactory.com/', headers=headers, cookies=cookies, timeout=20)
         response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'lxml')
         
-        # Parse with BeautifulSoup
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Check if blocked
-        if "Verifying you are human" in response.text or "Cloudflare" in response.text:
-            print("❌ Blocked by Cloudflare in requests method")
+        table = soup.select_one("table.calendar__table")
+        if not table:
+            print("❌ Calendar table not found in requests HTML")
             return []
         
-        # Find calendar table
-        table = soup.find("table", class_="calendar__table")
-        if not table:
-            # Try alternative selectors
-            table = soup.find("table", class_=lambda x: x and 'calendar' in x.lower())
-        
-        if not table:
-            print("❌ No calendar table found in requests method")
-            return []
-        
-        # Extract rows similar to Playwright method
-        rows = table.find_all("tr")
-        
+        rows = table.select("tr.calendar__row")
         extracted = []
-        for row in rows:
-            try:
-                cells = row.find_all(['td', 'th'])
-                
-                if len(cells) < 6:
-                    continue
-                
-                time_text = cells[0].get_text(strip=True) if len(cells) > 0 else ""
-                currency = cells[1].get_text(strip=True) if len(cells) > 1 else ""
-                impact = cells[2].get_text(strip=True) if len(cells) > 2 else ""
-                event = cells[3].get_text(strip=True) if len(cells) > 3 else ""
-                actual = cells[4].get_text(strip=True) if len(cells) > 4 else ""
-                forecast = cells[5].get_text(strip=True) if len(cells) > 5 else ""
-                previous = cells[6].get_text(strip=True) if len(cells) > 6 else ""
-                
-                if not time_text or time_text.lower() in ['all day', 'time', '']:
-                    continue
-                
-                if not any([currency, event, actual, forecast, previous]):
-                    continue
-                
-                extracted.append([time_text, currency, impact, event, actual, forecast, previous])
-                
-            except Exception as e:
-                continue
-        
         keys = ["Time", "Currency", "Impact", "Event", "Actual", "Forecast", "Previous"]
-        list_of_dicts = [dict(zip(keys, row)) for row in extracted]
-        
-        print(f"✅ Requests method extracted {len(list_of_dicts)} events!")
-        return list_of_dicts
-        
+
+        for row in rows:
+            cells = row.find_all('td')
+            if len(cells) < 6: continue
+            
+            row_data = [cell.get_text(strip=True) for cell in cells]
+            full_row_data = row_data[:7] + [""] * (7 - len(row_data))
+            
+            if not full_row_data[0] or full_row_data[0].lower() in ['all day', 'time', '']: continue
+            if not any(full_row_data[1:4]): continue
+            
+            extracted.append(dict(zip(keys, full_row_data)))
+
+        print(f"✅ Requests method extracted {len(extracted)} events!")
+        return extracted
     except Exception as e:
         print(f"❌ Requests method failed: {e}")
         return []
 
-# ========== AI and Telegram Functions ==========
+# ========== Gemini AI and Telegram Functions ==========
 # Config
-TYPHOON_URL = 'https://api.opentyphoon.ai/v1/chat/completions'
-TYPHOON_KEY = os.getenv("TYPHOON_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
+# ตั้งค่า Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+generation_config = {
+  "temperature": 0.4,
+  "top_p": 1,
+  "top_k": 1,
+  "max_output_tokens": 4096,
+}
+safety_settings = [
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+]
+model = genai.GenerativeModel(
+    model_name="gemini-1.5-pro-latest",
+    generation_config=generation_config,
+    safety_settings=safety_settings
+)
+
 SYSTEM_PROMPT = """
-You are a professional macroeconomic analyst. Your task is to evaluate scheduled economic events and determine their likely directional impact on the following individual currencies: EUR, USD, GBP, CHF, and JPY.
+You are a world-class Forex market analyst and strategist, specializing in short-term (intraday) trading for major currency pairs like EUR/USD, USD/JPY, USD/CHF, and USD/CAD. Your analysis must integrate fundamental news events with multi-timeframe technical analysis (H1 and M15).
 
-Go beyond numerical values—analyze each event based on:
-- The nature of the event (e.g., inflation data, central bank speech, sentiment survey, surprise rate cut).
-- Whether the result is above or below expectations (if provided).
-- The broader macroeconomic and policy context.
-- Any likely shifts in monetary policy or market sentiment.
-
-Output must be focused, concise, and actionable. Avoid greetings or conversational tone. Each response should be formatted in bullet-style blocks, suitable for use in trading signals or Telegram alerts.
+Your primary goal is to provide a clear, actionable trading plan for a day trader. You must identify the main trend, key support/resistance zones, and potential high-probability entry setups. The output must be concise, structured, and formatted with Markdown for Telegram.
 """
 
 USER_PROMPT_TEMPLATE = """
-Analyze the following economic events. For each event:
+Analyze the market for **{pair}** for today, **{date}**.
 
-- Start with the time and event title.
-- List only the **currencies directly affected**, with expected direction: "Likely to strengthen", "Likely to weaken", or "No significant change".
-- Include a **brief explanation** of why this event matters — based not just on numbers, but also on the type of event, its economic role, market expectations, and the broader macro context.
-- Highlight if this event may change monetary policy expectations or trigger volatility.
+**1. High-Impact Economic Events (Fundamental Context):**
+{news_data}
 
-Format your output in concise bullet-style text. Each item must be standalone and suitable for Telegram.
+**2. Technical Analysis - H1 Timeframe (Daily Bias & Key Zones):**
+- H1 OHLC Data (last 5 candles): `{h1_ohlc}`
+- H1 Indicators: EMA(20)=`{h1_ema20}`, EMA(50)=`{h1_ema50}`, RSI(14)=`{h1_rsi}`
 
-Events:
-{events_json}
+**3. Technical Analysis - M15 Timeframe (Precision Entry):**
+- M15 OHLC Data (last 5 candles): `{m15_ohlc}`
+- M15 Indicators: RSI(14)=`{m15_rsi}`
+
+**--- YOUR TASK ---**
+
+Based on ALL the data above, provide the following actionable trading plan, formatted in Markdown for Telegram:
+
+* **Overall Daily Bias:** (Bullish / Bearish / Neutral) - And a brief "why" in one sentence.
+* **Key Support Zones:** [List 1-2 important price zones, e.g., `1.0700 - 1.0710`]
+* **Key Resistance Zones:** [List 1-2 important price zones, e.g., `1.0800 - 1.0810`]
+* **High-Probability Trading Scenarios:**
+    * **Bullish Scenario 🐂:** Describe the condition for a LONG entry (e.g., "Wait for a bounce off Support Zone 1 with a bullish confirmation on M15"). Specify a potential TP area and a logical SL area.
+    * **Bearish Scenario 🐻:** Describe the condition for a SHORT entry. Specify a potential TP area and a logical SL area.
+
+Be concise, clear, and direct.
 """
 
-# --- Helper functions ---
-
-def chunk_events(events, chunk_size=5):
-    """Yield successive chunk_size-sized chunks from events list."""
-    for i in range(0, len(events), chunk_size):
-        yield events[i:i + chunk_size]
-
-def call_typhoon_api(system_prompt, user_prompt):
-    client = openai.OpenAI(
-        api_key=TYPHOON_KEY,
-        base_url="https://api.opentyphoon.ai/v1"
-    )
-
-    response = client.chat.completions.create(
-        model="typhoon-v2-70b-instruct",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        temperature=0.2,
-        max_tokens=3000
-    )
-    return response.choices[0].message.content
+def call_gemini_api(user_prompt):
+    """Calls the Gemini API with the structured prompt."""
+    print("🛰️  Calling Gemini API...")
+    try:
+        convo = model.start_chat(history=[
+            {'role': 'user', 'parts': [SYSTEM_PROMPT]},
+            {'role': 'model', 'parts': ["Acknowledged. I am ready to analyze the provided market data."]}
+        ])
+        convo.send_message(user_prompt)
+        print("✅ Gemini response received.")
+        return convo.last.text
+    except Exception as e:
+        print(f"❌ Gemini API call failed: {e}")
+        return "Error: Could not get analysis from Gemini."
 
 def send_telegram_message(text):
+    """Sends a message to a Telegram chat."""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {
-        'chat_id': CHAT_ID,
-        'text': text,
-        'parse_mode': 'Markdown',
-    }
-    resp = requests.post(url, data=data)
+    data = {'chat_id': CHAT_ID, 'text': text, 'parse_mode': 'Markdown'}
     try:
-        resp.raise_for_status()
-    except Exception as e:
-        print(f"Telegram send failed: {resp.status_code} {resp.text}")
-        raise e
+        response = requests.post(url, data=data)
+        response.raise_for_status()
+        print(f"📨 Telegram message sent successfully.")
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Telegram send failed: {e}")
+
+# ========== Main Workflow ==========
+def analyze_and_send(all_events, pair, data_fetcher):
+    """Analyzes a specific pair using news and technical data, then sends it."""
+    print(f"\n===== Analyzing: {pair} =====")
     
-def send_update_message_thai_time():
-    now_utc = datetime.utcnow()
-    now_ict = now_utc + timedelta(hours=7)  # UTC+7 = ICT (Thailand Time)
-    formatted_time = now_ict.strftime('%Y-%m-%d %H:%M:%S')
-    send_telegram_message(f"Updated News at {formatted_time} ICT")
+    # 1. กรองข่าวที่เกี่ยวข้องกับคู่เงิน
+    currencies = pair.split('/')
+    relevant_news = [
+        event for event in all_events 
+        if event['Currency'] in currencies and "High" in event.get('Impact', '')
+    ]
+    news_data_str = json.dumps(relevant_news, indent=2) if relevant_news else "No high-impact news scheduled for this pair."
+    
+    # 2. ดึงข้อมูล Technical (จากคลาส IQDataFetcher) <<<< แก้ไขตรงนี้
+    print(f"⚙️ Fetching REAL technical data for {pair}...")
+    tech_data = data_fetcher.get_technical_data(pair)
+    if not tech_data:
+        send_telegram_message(f"⚠️ Could not fetch technical data for *{pair}*. Skipping analysis.")
+        return # ข้ามไปคู่ถัดไป
+    
+    # 3. สร้าง Prompt ที่สมบูรณ์
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    user_prompt = USER_PROMPT_TEMPLATE.format(
+        pair=pair,
+        date=today_date,
+        news_data=news_data_str,
+        h1_ohlc=tech_data["h1_ohlc"],
+        h1_ema20=tech_data["h1_ema20"],
+        h1_ema50=tech_data["h1_ema50"],
+        h1_rsi=tech_data["h1_rsi"],
+        m15_ohlc=tech_data["m15_ohlc"],
+        m15_rsi=tech_data["m15_rsi"]
+    )
+    
+    # 4. เรียก Gemini API
+    ai_response = call_gemini_api(user_prompt)
+    
+    # 5. ส่งผลลัพธ์ไปที่ Telegram
+    header = f"💎 *Gemini Forex Analysis for {pair}*"
+    full_message = f"{header}\n{'-'*20}\n{ai_response}"
+    send_telegram_message(full_message)
+    time.sleep(5) # หน่วงเวลาเพื่อไม่ให้ส่งข้อความเร็วเกินไป
 
-def dispatch_messages(text, timeout):
-    # Split by double newlines assuming each event block separated by \n\n
-    blocks = [block.strip() for block in text.split('\n\n') if block.strip()]
-    for block in blocks:
-        send_telegram_message(block)
-        time.sleep(timeout)  # rate-limit safety pause
-
-# --- Main workflow ---
-
-def analyze_and_send(events, timeout=2):
-    if not events:
-        print("❌ No events to analyze")
-        send_telegram_message("❌ No economic events found to analyze")
-        return
-        
-    for chunk in chunk_events(events, chunk_size=5):
-        chunk_json = json.dumps(chunk, ensure_ascii=False)
-        user_prompt = USER_PROMPT_TEMPLATE.format(events_json=chunk_json)
-        try:
-            ai_response = call_typhoon_api(SYSTEM_PROMPT, user_prompt)
-        except Exception as e:
-            print(f"Error calling Typhoon API: {e}")
-            continue
-        dispatch_messages(ai_response, timeout)
-
-# --- Main execution ---
 if __name__ == '__main__':
-    print("🚀 Starting ForexFactory Scraper with Playwright")
-    print("=" * 50)
-    
-    # Send initial message
-    send_update_message_thai_time()
-    
-    # Try Playwright first, then fallback to requests
-    print("📡 Scraping ForexFactory...")
-    list_of_dicts = scrape_forex_factory()
-    
-    # If Playwright fails, try requests method
-    if not list_of_dicts:
-        print("🔄 Playwright failed, trying requests method...")
-        list_of_dicts = scrape_forex_factory_requests()
-    
-    if not list_of_dicts:
-        print("❌ Both scraping methods failed, exiting...")
-        send_telegram_message("❌ Failed to scrape ForexFactory data using both methods")
+    print("🚀 Starting Forex Analysis Bot...")
+
+    # สร้าง Instance ของ Data Fetcher
+    print("Initializing data connection...")
+    data_fetcher = IQDataFetcher()
+    # เช็คว่าเชื่อมต่อสำเร็จไหม
+    if data_fetcher.api is None:
+        send_telegram_message("❌ Bot could not connect to IQ Option. Shutting down.")
         exit(1)
     
-    print(f"📊 Scraped {len(list_of_dicts)} events")
-    
-    # Show first few events
-    print("\n📋 First 3 events:")
-    for i, event in enumerate(list_of_dicts[:3]):
-        print(f"  {i+1}. {event}")
-    
-    # Analyze and send
-    MAX_RETRIES = 5
-    RETRY_DELAY = 3  # seconds
-    
-    retries = 0
-    timer = 0.5
-    
-    while retries < MAX_RETRIES:
-        try:
-            analyze_and_send(list_of_dicts, timer)
-            break  # Success, exit loop
-        except Exception as e:
-            print(f"Error in main workflow (attempt {retries + 1}): {e}")
-            send_telegram_message(f"Error occurred: retrying...")
-            send_update_message_thai_time()
-            timer *= 2  # Increase timer for next retry
-            retries += 1
-            time.sleep(RETRY_DELAY)
+    # 1. ดึงข้อมูลข่าวจาก Forex Factory
+    all_events = scrape_forex_factory()
+    if not all_events:
+        # ไม่ต้องลอง requests อีก เพราะเรารู้ว่ามันใช้ไม่ได้
+        print("📰 No news events found for today, or scraping failed. Proceeding with technical analysis only.")
+        all_events = [] # ทำให้แน่ใจว่าเป็น list ว่าง
     else:
-        send_telegram_message("❌ Max retries reached. Process failed permanently.")
-        
-    # End of script
-    print("✅ Script completed successfully.")
+        print(f"📰 Scraped {len(all_events)} total events.")
+
+    # 2. ตั้งค่าคู่เงินที่ต้องการวิเคราะห์
+    target_pairs = ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "USD/CAD"]
+    
+    # 3. วนลูปเพื่อวิเคราะห์และส่งข้อมูลทีละคู่เงิน
+    now_ict = datetime.utcnow() + timedelta(hours=7)
+    initial_message = f"📈 *Daily Analysis Rundown* at {now_ict.strftime('%Y-%m-%d %H:%M')} ICT"
+    send_telegram_message(initial_message)
+    time.sleep(2)
+
+    for pair in target_pairs:
+        # ไม่ว่าจะมีข่าวหรือไม่ ก็ให้ทำงานต่อไป
+        analyze_and_send(all_events, pair, data_fetcher)
+
+    data_fetcher.close_connection()  
+    print("\n✅ All pairs analyzed. Script finished.")
