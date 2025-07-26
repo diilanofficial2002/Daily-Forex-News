@@ -27,8 +27,8 @@
 
 ```bash
 # Clone a repository
-git clone <your-repo-url>
-cd <your-repo-folder>
+git clone https://github.com/diilanofficial2002/Daily-Forex-News.git
+cd Daily-Forex-News
 
 # ติดตั้ง Dependencies จาก requirements.txt
 pip install -r requirements.txt
