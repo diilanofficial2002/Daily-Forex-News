@@ -1,194 +1,122 @@
-# ForexFactory News Scraper
+# 🤖 Automated Forex Analysis Bot
 
-Automated scraper for ForexFactory economic news with AI analysis and Telegram notifications.
+บอทวิเคราะห์ตลาด Forex อัตโนมัติที่ผสมผสานระหว่างปัจจัยพื้นฐาน (ข่าวเศรษฐกิจ) และปัจจัยทางเทคนิค (ข้อมูลราคาและ Indicators) โดยใช้ **Google Gemini AI** ในการวิเคราะห์และส่งแผนการเทรดรายวันผ่าน **Telegram**
 
-## 🚀 Features
+## 🚀 คุณสมบัติ (Features)
 
-- **Automated Scraping**: Scrapes ForexFactory economic calendar daily
-- **AI Analysis**: Uses Typhoon AI to analyze economic events impact
-- **Telegram Notifications**: Sends analyzed news to Telegram channel
-- **Robust Error Handling**: Multiple fallback methods and retry logic
-- **GitHub Actions**: Fully automated with scheduled runs
+- **Automated News Scraping**: ดึงข้อมูลข่าวเศรษฐกิจจาก `ForexFactory` อัตโนมัติ
+- **Real-time Technical Data**: เชื่อมต่อ **IQ Option API** เพื่อดึงข้อมูลราคา (OHLC) และคำนวณ Technical Indicators (EMA, RSI)
+- **Advanced AI Analysis**: ใช้ **Google Gemini** ในการวิเคราะห์ข้อมูลทั้งหมดเพื่อสร้างแผนการเทรดรายวัน
+- **Telegram Notifications**: ส่งบทวิเคราะห์และแผนการเทรดที่ชัดเจนไปยังช่องทาง Telegram
+- **Scheduled & Automated**: ทำงานอัตโนมัติทุกวันตามเวลาที่กำหนดด้วย **GitHub Actions**
 
-## 📋 Requirements
+## 📋 สิ่งที่ต้องมี (Requirements)
 
 - Python 3.9+
-- Playwright (for web scraping)
-- BeautifulSoup4 (HTML parsing)
-- OpenAI SDK (for Typhoon AI API)
+- Playwright (สำหรับดึงข้อมูลเว็บ)
+- Pandas & Pandas-TA (สำหรับจัดการข้อมูลและคำนวณ Indicators)
+- Google Generative AI SDK (สำหรับ Gemini API)
+- IQ Option API
+- บัญชี IQ Option (แนะนำให้เริ่มด้วยบัญชี Practice)
+- Google Gemini API Key
 - Telegram Bot Token
-- Typhoon AI API Key
 
-## 🔧 Setup Instructions
+## 🔧 วิธีการติดตั้ง (Setup Instructions)
 
-### 1. Local Setup
+### 1\. การติดตั้งในเครื่อง (Local Setup)
 
 ```bash
-# Clone repository
+# Clone a repository
 git clone <your-repo-url>
-cd forexfactory-scraper
+cd <your-repo-folder>
 
-# Install dependencies
+# ติดตั้ง Dependencies จาก requirements.txt
 pip install -r requirements.txt
 
-# Install Playwright browsers
-playwright install chromium
+# ติดตั้ง IQ Option API โดยตรงจาก GitHub
+pip install -U git+https://github.com/iqoptionapi/iqoptionapi.git@7.1.1
 
-# Create .env file
-cp .env.example .env
-# Edit .env with your credentials
+# ติดตั้ง Browsers สำหรับ Playwright
+npx playwright install --with-deps
+
+# สร้างไฟล์ .env สำหรับเก็บข้อมูลสำคัญ
+# คัดลอก .env.example (ถ้ามี) หรือสร้างไฟล์ใหม่
 ```
 
-### 2. Environment Variables
+### 2\. ตั้งค่า Environment Variables
 
-Create a `.env` file with:
+สร้างไฟล์ชื่อ `.env` ในโฟลเดอร์หลักของโปรเจกต์ แล้วใส่ข้อมูลของนายลงไป:
 
 ```env
-BOT_TOKEN=your_telegram_bot_token
-CHAT_ID=your_telegram_chat_id
-TYPHOON_API_KEY=your_typhoon_api_key
+# สำหรับ Gemini API
+GEMINI_API_KEY="your_google_gemini_api_key"
+
+# สำหรับ Telegram Bot
+TELEGRAM_TOKEN="your_telegram_bot_token"
+CHAT_ID="your_telegram_chat_id"
+
+# สำหรับ IQ Option API
+IQ_USER="your_iqoption_email"
+IQ_PASS="your_iqoption_password"
 ```
 
-### 3. GitHub Actions Setup
+### 3\. ตั้งค่าสำหรับ GitHub Actions
 
 #### Required Secrets
 
-Add these secrets to your GitHub repository:
+ไปที่หน้า Repository ของนายบน GitHub \> **Settings** \> **Secrets and variables** \> **Actions** แล้วเพิ่ม Secrets ทั้งหมด 5 ตัวนี้:
 
-1. Go to **Settings** → **Secrets and variables** → **Actions**
-2. Add the following secrets:
-   - `BOT_TOKEN`: Your Telegram bot token
-   - `CHAT_ID`: Your Telegram chat ID  
-   - `TYPHOON_API_KEY`: Your Typhoon AI API key
+- `GEMINI_API_KEY`
+- `TELEGRAM_TOKEN`
+- `CHAT_ID`
+- `IQ_USER`
+- `IQ_PASS`
 
-#### Getting Telegram Credentials
+-----
 
-1. **Create Telegram Bot**:
-   - Message [@BotFather](https://t.me/BotFather) on Telegram
-   - Send `/newbot` and follow instructions
-   - Save the bot token
+### 4\. ตารางเวลาการทำงาน (Workflow Schedule)
 
-2. **Get Chat ID**:
-   - Add your bot to a channel or group
-   - Send a message to the channel/group
-   - Visit: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
-   - Find your chat ID in the response
+บอทถูกตั้งค่าให้ทำงานอัตโนมัติ **1 ครั้งต่อวัน** ในเวลา **6:00 น. ตามเวลาประเทศไทย** (23:00 UTC)
 
-#### Getting Typhoon AI API Key
+### 5\. การสั่งให้ทำงานด้วยตนเอง (Manual Trigger)
 
-1. Visit [OpenTyphoon.ai](https://opentyphoon.ai/)
-2. Sign up for an account
-3. Generate an API key
-4. Copy the key for use in the environment variables
+นายสามารถสั่งให้บอททำงานทันทีเพื่อทดสอบได้โดย:
 
-### 4. Workflow Schedule
+1. ไปที่แท็บ **Actions** ในหน้า GitHub repository
+2. เลือก **Run Daily Forex Analysis** ในเมนูด้านซ้าย
+3. กดปุ่ม **Run workflow**
 
-The scraper runs automatically at:
+## 📈 การปรับแต่ง (Customization)
 
-- 8:00 AM Thailand time (01:00 UTC)
-- 12:00 PM Thailand time (05:00 UTC)
-- 4:00 PM Thailand time (09:00 UTC)
-- 8:00 PM Thailand time (13:00 UTC)
+### แก้ไขตารางเวลา
 
-### 5. Manual Trigger
+แก้ไข `cron` ในไฟล์ `.github/workflows/run_forex_new_6am.yml` เพื่อเปลี่ยนเวลาทำงาน
 
-You can manually trigger the workflow:
+### ปรับเปลี่ยนการวิเคราะห์ของ AI
 
-1. Go to **Actions** tab in GitHub
-2. Select **ForexFactory News Scraper**
-3. Click **Run workflow**
-4. Optionally enable debug mode
+แก้ไข `SYSTEM_PROMPT` ในไฟล์ `forex_daily_news.py` เพื่อปรับเปลี่ยนบุคลิกหรือเป้าหมายการวิเคราะห์ของ Gemini
 
-## 🔍 Troubleshooting
+### เพิ่ม/ลดคู่เงิน
 
-### Common Issues
+แก้ไขลิสต์ `target_pairs` ในไฟล์ `forex_daily_news.py` เพื่อกำหนดคู่เงินที่ต้องการวิเคราะห์
 
-1. **Playwright timeout**:
-   - GitHub Actions has slower network
-   - Script includes extended timeouts and retries
+## 📝 โครงสร้างไฟล์ (File Structure)
 
-2. **Cloudflare blocking**:
-   - Script includes anti-detection measures
-   - Falls back to requests method if Playwright fails
-
-3. **Missing dependencies**:
-   - All system dependencies are installed in workflow
-   - Fonts and display drivers included
-
-### Debug Mode
-
-Run with debug mode enabled:
-
-```bash
-python forex_daily_news.py --debug
-```
-
-### Logs
-
-Check GitHub Actions logs:
-
-- Failed runs upload artifacts with detailed logs
-- Telegram notifications sent on success/failure
-
-## 📊 Monitoring
-
-The workflow includes:
-
-- **Health checks**: Verifies API endpoints before scraping
-- **Success notifications**: Confirms successful completion
-- **Failure notifications**: Alerts when scraping fails
-- **Artifact uploads**: Saves logs for debugging failed runs
-
-## 🛡️ Security
-
-- All sensitive data stored as GitHub Secrets
-- No credentials exposed in code or logs
-- Environment variables properly isolated
-- Timeout limits prevent runaway processes
-
-## 📈 Customization
-
-### Modify Schedule
-
-Edit the `cron` expressions in `.github/workflows/scraper.yml`:
-
-```yaml
-schedule:
-  - cron: '0 1 * * *'    # Your desired time in UTC
-```
-
-### Change Analysis Prompt
-
-Modify the `SYSTEM_PROMPT` in `forex_daily_news.py` to customize AI analysis.
-
-### Add More Currencies
-
-Update the analysis prompt to include additional currencies beyond EUR, USD, GBP, CHF, JPY.
-
-## 📝 File Structure
-
-```
+```text
 ├── .github/
 │   └── workflows/
-│       └── scraper.yml          # GitHub Actions workflow
-├── forex_daily_news.py          # Main scraper script
-├── requirements.txt             # Python dependencies
-├── .env.example                 # Environment variables template
-└── README.md                    # This file
+│       └── run_forex_new_6am.yml    # ไฟล์ควบคุม GitHub Actions
+├── get_data.py                      # ไฟล์สำหรับดึงข้อมูลจาก IQ Option
+├── forex_daily_news.py              # สคริปต์หลัก
+├── requirements.txt                 # รายชื่อ Python dependencies
+├── .env                             # ไฟล์เก็บข้อมูลสำคัญ (ไม่ควร push ขึ้น GitHub)
+└── README.md                        # ไฟล์นี้
 ```
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test locally
-5. Submit a pull request
-
-## 📄 License
+## 📄 ใบอนุญาต (License)
 
 This project is licensed under the MIT License.
 
-## ⚠️ Disclaimer
+## ⚠️ คำเตือน (Disclaimer)
 
-This tool is for educational and informational purposes only. Always verify economic data from official sources before making trading decisions.
+เครื่องมือนี้สร้างขึ้นเพื่อวัตถุประสงค์ในการศึกษาและเป็นข้อมูลเท่านั้น ควรตรวจสอบข้อมูลจากแหล่งที่เป็นทางการเสมอและตัดสินใจลงทุนด้วยความระมัดระวัง
