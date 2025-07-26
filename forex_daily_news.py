@@ -111,7 +111,7 @@ def scrape_forex_factory_requests():
 # ========== Gemini AI and Telegram Functions ==========
 # Config
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 # ตั้งค่า Gemini
