@@ -238,7 +238,9 @@ def analyze_and_send(all_events, pair, data_fetcher,bot):
         daily_pivot_s2=tech_data["daily_pivot_s2"], # เพิ่มเข้ามา
         daily_pivot_s3=tech_data["daily_pivot_s3"], # เพิ่มเข้ามา
         m15_ohlc=tech_data["m15_ohlc"],
-        m15_rsi=tech_data["m15_rsi"]
+        m15_rsi=tech_data["m15_rsi"],
+        m15_ema20=tech_data["m15_ema20"],
+        m15_ema50=tech_data["m15_ema50"]
     )
     
     # 4. เรียก Gemini API
