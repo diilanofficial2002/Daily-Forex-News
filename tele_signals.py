@@ -20,15 +20,13 @@ class TyphoonForexAnalyzer:
     **Support Zones:**  
     **Resistance Zones:**  
 
-    **Bullish Scenario:**  
-    - TP1: (price and pip difference from support)  
-    - TP2: (price and pip difference from support, if available)  
-    - SL: (price and pip difference from support)  
+    **Today order:**  
+    [Order type]:[price level]
+    - TP1: (price and pip difference from order)  
+    - TP2: (price and pip difference from order, if available)  
+    - SL: (price and pip difference from order)  
 
-    **Bearish Scenario:**  
-    - TP1: (price and pip difference from resistance)  
-    - TP2: (price and pip difference from resistance, if available)  
-    - SL: (price and pip difference from resistance)  
+    ...
 
     Here is the analysis:
     {analysis_text}
