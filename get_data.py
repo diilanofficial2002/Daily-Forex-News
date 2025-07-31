@@ -177,6 +177,8 @@ class IQDataFetcher:
             "daily_pivot_s2": daily_pivots["s2"],
             "daily_pivot_s3": daily_pivots["s3"],
             "m15_ohlc": m15_data['ohlc'],
+            "m15_ema20": m15_data['ema20'], # เพิ่มบรรทัดนี้
+            "m15_ema50": m15_data['ema50'], # เพิ่มบรรทัดนี้
             "m15_rsi": m15_data['rsi'],
         }
 
