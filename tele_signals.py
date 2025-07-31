@@ -34,7 +34,7 @@ class TyphoonForexAnalyzer:
     {analysis_text}
     """
 
-    def analyze(self, analysis_text, max_tokens=200, temperature=0.3):
+    def analyze(self, analysis_text, max_tokens=3072, temperature=0.3):
         prompt = self.build_prompt(analysis_text)
         payload = {
             "model": self.model,
@@ -43,7 +43,7 @@ class TyphoonForexAnalyzer:
                 {"role": "user", "content": prompt}
             ],
             "max_tokens": max_tokens,
-            "temperature": temperature
+            "temperature": temperature,
         }
         response = requests.post(
             self.endpoint,
