@@ -9,29 +9,32 @@ class TyphoonForexAnalyzer:
 
     def build_prompt(self, analysis_text):
         return f"""
-    You must return only the following structured format without any additional explanation or commentary.
-    - Use 1 pip = 0.01 for JPY pairs.
-    - Calculate pip distance from entry point (use nearest support for bullish, nearest resistance for bearish).
-    - If multiple take-profit targets are given, include them all as TP1, TP2, etc.
-
-    Use the following format only:
-
-    **Currency:** 
-
-    **Today order:**  
-    [Order type]:[price level]
-    - TP1: (price and pip absolute difference from order price)  
-    - TP2: (price and pip absolute difference from order price, if available)  
-    - SL: (price and pip absolute difference from order price)
-
-    **Plan B:**
-    [Order type]:[price level]
-    - TP: (price and pip absolute difference from order price) 
-    - SL: (price and pip absolute difference from order price)
-
-    Here is the analysis:
-    {analysis_text}
-    """
+        You must extract only the trading plan details from the provided analysis and structure them precisely as specified below. Do not include any additional commentary, explanations, or introductory/concluding remarks.
+    
+        **Pip Calculation Rules:**
+        - For JPY pairs (e.g., USD/JPY, EUR/JPY), 1 pip = 0.01.
+        - For all other pairs (e.g., EUR/USD, GBP/USD), 1 pip = 0.0001.
+        - All pip differences must be calculated as the **absolute difference from the identified Entry Price**.
+    
+        **Output Format (Strictly Adhere):**
+    
+        **Currency:** [Currency Pair, e.g., EUR/USD]
+    
+        **Primary Trading Plan:**
+        [Order Type, e.g., BUY or SELL]: [Entry Price Level, e.g., 1.07540]
+        - TP1: [Target Price Level, e.g., 1.07680] ([Absolute Pip Difference from Entry, e.g., +14 pips])
+        - TP2: [Target Price Level, e.g., 1.07750] ([Absolute Pip Difference from Entry, e.g., +21 pips]) (If available, otherwise omit)
+        - SL: [Stop Loss Price Level, e.g., 1.07450] ([Absolute Pip Difference from Entry, e.g., -9 pips])
+    
+        **Secondary Trading Plan (Optional):**
+        [Order Type, e.g., SELL or BUY]: [Entry Price Level, e.g., 1.07300]
+        - TP1: [Target Price Level, e.g., 1.07100] ([Absolute Pip Difference from Entry, e.g., -20 pips])
+        - SL: [Stop Loss Price Level, e.g., 1.07400] ([Absolute Pip Difference from Entry, e.g., +10 pips])
+        (If no secondary plan or "No Trade" is recommended in the analysis, this section should be omitted entirely or stated as "No secondary plan available.")
+    
+        Here is the analysis to extract data from:
+        {analysis_text}
+        """
 
     def analyze(self, analysis_text, max_tokens=3072, temperature=0.3):
         prompt = self.build_prompt(analysis_text)
