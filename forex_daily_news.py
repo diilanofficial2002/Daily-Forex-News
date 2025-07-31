@@ -138,62 +138,37 @@ model = genai.GenerativeModel(
 )
 
 SYSTEM_PROMPT = """
-You are a world-class Forex market analyst and strategist, specializing in short-term trading (aiming for 6-12 hour position closure) for major currency pairs like EUR/USD, USD/JPY, USD/CHF, and USD/CAD. Your analysis must integrate fundamental news events with multi-timeframe technical analysis (H1 and M15).
+You are a world-class Forex market analyst and strategist, specializing in short-term trading (aiming for 6-12 hour position closure) for major currency pairs like EUR/USD, USD/JPY, USD/CHF, and USD/CAD. Your analysis must rigorously integrate high-impact fundamental news events with multi-timeframe technical analysis (H1 and M15).
 
-Your primary goal is to provide a clear, actionable trading plan for a day trader. You must identify the main trend, key support/resistance zones, and potential high-probability entry setups. The output must be concise, structured, and formatted with Markdown for Telegram. Crucially, all trading scenarios must include well-defined TP1 and TP2(optional) targets, with reasoning, and a logical SL area, designed for a 6-12 hour holding period.
+Your primary goal is to provide a clear, actionable trading plan for a day trader. This plan must identify the **main trend**, **key support/resistance zones**, and **high-probability entry setups** based on common M15 price action patterns (e.g., strong candlestick reversals, engulfing patterns, pin bars, break-and-retest of key levels). The output must be concise, structured, and formatted with Markdown for Telegram, ensuring it's easy to read and understand.
+
+Crucially, all trading scenarios must include:
+1.  **Well-defined TP1 and TP2 (optional) targets**, with clear and explicit reasoning based on technical confluence (e.g., next significant S/R, daily pivot points, previous swing highs/lows, Fibonacci levels if applicable).
+2.  A **logical SL area**, designed for a 6-12 hour holding period, placed strategically below/above key technical levels (e.g., below support, above resistance, beyond a previous swing low/high) to protect capital effectively.
+3.  **Explicit reasoning** for both TP and SL placements, explaining the technical rationale.
+
+Your analysis must connect the high-impact economic events directly to current market sentiment, potential volatility, and the most likely directional bias for the specific currency pair. If no high-probability setup is identified based on the provided data and current market conditions, clearly state the reasons for caution and advise a "no trade" stance for the given period.
+
+Ensure the language is professional yet accessible, avoiding overly academic jargon but maintaining a high standard of analytical rigor.
 """
 
 USER_PROMPT_TEMPLATE = """
 Analyze the market for {pair} for today, {date}.
 
-1. High-Impact Economic Events (Fundamental Context):
-{news_data}
+1.  **High-Impact Economic Events (Fundamental Context):**
+    {news_data}
 
-2. Technical Analysis - H1 Timeframe (Daily Bias & Key Zones):
+2.  **Technical Analysis - H1 Timeframe (Daily Bias & Key Zones):**
+    * H1 OHLC Data (last 5 candles) (Note: All price data is in 0.1 pips. For example, 1.07543 represents 1.07543, where the '3' is the 0.1 pip unit. A 1-pip movement changes the second to last decimal place.): {h1_ohlc}
+    * H1 Indicators: EMA(20)={h1_ema20}, EMA(50)={h1_ema50}, RSI(14)={h1_rsi}
+    * Previous Day's Levels: High={prev_day_high}, Low={prev_day_low}, Close={prev_day_close}
+    * Daily Pivot Points: PP={daily_pivot_pp}, R1={daily_pivot_r1}, R2={daily_pivot_r2}, R3={daily_pivot_r3}, S1={daily_pivot_s1}, S2={daily_pivot_s2}, S3={daily_pivot_s3}
 
-H1 OHLC Data (last 5 candles) (Note: All price data is in 0.1 pips. For example, 1.07543 represents 1.07543, where the '3' is the 0.1 pip unit. A 1-pip movement changes the second to last decimal place.): {h1_ohlc}
+3.  **Technical Analysis - M15 Timeframe (Entry & Confirmation):**
+    * M15 OHLC Data (last 5 candles): {m15_ohlc}
+    * M15 Indicators: EMA(20)={m15_ema20}, EMA(50)={m15_ema50}, RSI(14)={m15_rsi}
 
-H1 Indicators: EMA(20)={h1_ema20}, EMA(50)={h1_ema50}, RSI(14)={h1_rsi}
-
-Previous Day's Levels: High={prev_day_high}, Low={prev_day_low}, Close={prev_day_close}
-
-Daily Pivot Points: PP={daily_pivot_pp}, R1={daily_pivot_r1}, R2={daily_pivot_r2}, R3={daily_pivot_r3}, S1={daily_pivot_s1}, S2={daily_pivot_s2}, S3={daily_pivot_s3}
-
-3. Technical Analysis - M15 Timeframe (Precision Entry):
-
-M15 OHLC Data (last 5 candles) (Note: All price data is in 0.1 pips. For example, 1.07543 represents 1.07543, where the '3' is the 0.1 pip unit. A 1-pip movement changes the second to last decimal place.): {m15_ohlc}
-
-M15 Indicators: RSI(14)={m15_rsi}
-
---- YOUR TASK ---
-
-Based on ALL the data above, provide the following actionable trading plan, formatted in Markdown for Telegram. The trading scenarios should aim for position closures within 6-12 hours, with clear TP1 and TP2(optional) target(s).
-
-Overall Daily Bias: (Bullish / Bearish / Neutral) - And a brief "why" in one sentence, considering fundamentals and technicals.
-
-Key Support Zones: [List 1-2 important price zones, e.g., 1.0700 - 1.0710 (mentioning if from Pivot, Prev Day Low, etc.)]
-
-Key Resistance Zones: [List 1-2 important price zones, e.g., 1.0800 - 1.0810 (mentioning if from Pivot, Prev Day High, etc.)]
-
-High-Probability Trading Scenarios (Aiming for 1-2 day closure):
-
-Bullish Scenario 🐂: Describe the condition for a LONG entry (e.g., "Wait for a bounce off Support Zone 1 with a bullish confirmation on M15, perhaps a bullish candlestick pattern"). Specify TP1 (e.g., "TP1 at [Price] - targeting [e.g., Daily R1 / Minor H1 Resistance]"), TP2 (e.g., "TP2 at [Price] - targeting [e.g., Daily R2 / H1 Supply Zone]"), and a logical SL area.
-
-Bearish Scenario 🐻: Describe the condition for a SHORT entry. Specify TP1 (e.g., "TP1 at [Price] - targeting [e.g., Daily S1 / Minor H1 Support]"), TP2 (e.g., "TP2 at [Price] - targeting [e.g., Daily S2 / H1 Demand Zone]"), and a logical SL area.
-
-Recommended Order Type for Today (Choose only ONE most probable out of Buy Stop, Buy Limit, Sell Stop, Sell Limit) and Plan B if actually not follow the analysis:
-
-[Order Type]: [Price Level] 
-TP1: [Price] 
-TP2: [Price]
-SL: [Price]
-
-Plan B : [event]
-[Order Type]: [Price Level]
-TP: [Price]
-SL: [Price]
-
-Be concise, clear, and direct.
+Current time (for reference): {current_time}
 """
 
 def call_gemini_api(user_prompt):
