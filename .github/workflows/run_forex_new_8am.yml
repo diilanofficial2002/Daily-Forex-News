@@ -5,8 +5,7 @@ name: Run Daily Forex Analysis
 on:
   workflow_dispatch: # อนุญาตให้เรากดรันเองได้เพื่อทดสอบ
   schedule:
-    # รันทุกวัน เวลา 01:00 UTC ซึ่งเท่ากับ 8:00 น. ตามเวลาประเทศไทย (UTC+7)
-    - cron: '0 23 * * 0-4'
+    - cron: '30 23 * * 0-4'
 
 # กำหนดงานที่จะต้องทำ
 jobs:
