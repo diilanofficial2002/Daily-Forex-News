@@ -100,6 +100,20 @@ class IQDataFetcher:
             "rsi": f"{latest['RSI_14']:.2f}" if 'RSI_14' in latest else "N/A",
         }
 
+    def _calculate_pivot_points(self, high, low, close):
+        """Calculates Standard Daily Pivot Points."""
+        pp = (high + low + close) / 3
+        r1 = (2 * pp) - low
+        s1 = (2 * pp) - high
+        r2 = pp + (high - low)
+        s2 = pp - (high - low)
+        r3 = high + 2 * (pp - low)
+        s3 = low - 2 * (high - pp)
+        return {
+            "pp": f"{pp:.5f}", "r1": f"{r1:.5f}", "s1": f"{s1:.5f}",
+            "r2": f"{r2:.5f}", "s2": f"{s2:.5f}", "r3": f"{r3:.5f}", "s3": f"{s3:.5f}"
+        }
+
     def get_technical_data(self, pair):
         """
         ฟังก์ชันหลักที่เรียกใช้จากภายนอก เพื่อรวบรวมข้อมูลทั้งหมด
@@ -107,10 +121,7 @@ class IQDataFetcher:
         if not self.api:
             return None # หากเชื่อมต่อไม่สำเร็จ ให้คืนค่า None
 
-        # แปลงชื่อคู่เงินให้เป็นรูปแบบที่ API ต้องการ (เช่น EUR/USD -> EURUSD)
         api_pair_name = pair.replace("/", "")
-        
-        # Timeframe ใน IQ Option ใช้หน่วยเป็นวินาที (H1=3600, M15=900)
         
         # 1. ดึงข้อมูล H1 และคำนวณ
         h1_candles = self._fetch_candles(api_pair_name, 3600, 100) # ดึง 100 แท่ง
@@ -120,16 +131,51 @@ class IQDataFetcher:
         m15_candles = self._fetch_candles(api_pair_name, 900, 100) # ดึง 100 แท่ง
         m15_data = self._calculate_indicators(m15_candles)
 
+        # 3. ดึงข้อมูลแท่งเทียนรายวัน (D1) เพื่อหา Previous Day's High/Low/Close
+        #    ต้องการอย่างน้อย 2 แท่ง เพื่อให้แน่ใจว่าได้แท่งที่สมบูรณ์ของวันก่อนหน้า
+        d1_candles = self._fetch_candles(api_pair_name, 86400, 2) 
+        prev_day_high = "N/A"
+        prev_day_low = "N/A"
+        prev_day_close = "N/A"
+        daily_pivots = {
+            "pp": "N/A", "r1": "N/A", "s1": "N/A",
+            "r2": "N/A", "s2": "N/A", "r3": "N/A", "s3": "N/A"
+        }
+
+        if d1_candles and len(d1_candles) >= 2:
+            # แท่งที่สองจากท้ายคือแท่งของวันก่อนหน้า
+            prev_day_candle = d1_candles[-2] 
+            prev_day_high = f"{prev_day_candle['high']:.5f}"
+            prev_day_low = f"{prev_day_candle['low']:.5f}"
+            prev_day_close = f"{prev_day_candle['close']:.5f}"
+            
+            # คำนวณ Pivot Points จากข้อมูลวันก่อนหน้า
+            daily_pivots = self._calculate_pivot_points(
+                prev_day_candle['high'], 
+                prev_day_candle['low'], 
+                prev_day_candle['close']
+            )
+
         if not h1_data or not m15_data:
             print(f"❌ Could not retrieve full technical data for {pair}.")
             return None
         
-        # 3. ประกอบร่างข้อมูลทั้งหมดเพื่อส่งคืน
+        # 4. ประกอบร่างข้อมูลทั้งหมดเพื่อส่งคืน
         return {
             "h1_ohlc": h1_data['ohlc'],
             "h1_ema20": h1_data['ema20'],
             "h1_ema50": h1_data['ema50'],
             "h1_rsi": h1_data['rsi'],
+            "prev_day_high": prev_day_high,
+            "prev_day_low": prev_day_low,
+            "prev_day_close": prev_day_close,
+            "daily_pivot_pp": daily_pivots["pp"],
+            "daily_pivot_r1": daily_pivots["r1"],
+            "daily_pivot_r2": daily_pivots["r2"],
+            "daily_pivot_r3": daily_pivots["r3"],
+            "daily_pivot_s1": daily_pivots["s1"],
+            "daily_pivot_s2": daily_pivots["s2"],
+            "daily_pivot_s3": daily_pivots["s3"],
             "m15_ohlc": m15_data['ohlc'],
             "m15_rsi": m15_data['rsi'],
         }

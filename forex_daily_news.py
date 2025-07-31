@@ -10,6 +10,7 @@ import os
 import json
 
 from get_data import IQDataFetcher
+from tele_signals import TyphoonForexAnalyzer, TelegramNotifier, ForexBot
 
 load_dotenv()
 
@@ -111,7 +112,9 @@ def scrape_forex_factory_requests():
 # ========== Gemini AI and Telegram Functions ==========
 # Config
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+TYPHOON_API_KEY = os.getenv("TYPHOON_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+SIGNAL_TOKEN = os.getenv("SIGNAL_BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 # ตั้งค่า Gemini
@@ -135,9 +138,9 @@ model = genai.GenerativeModel(
 )
 
 SYSTEM_PROMPT = """
-You are a world-class Forex market analyst and strategist, specializing in short-term (intraday) trading for major currency pairs like EUR/USD, USD/JPY, USD/CHF, and USD/CAD. Your analysis must integrate fundamental news events with multi-timeframe technical analysis (H1 and M15).
+You are a world-class Forex market analyst and strategist, specializing in short-term trading (aiming for 1-2 day position closure) for major currency pairs like EUR/USD, USD/JPY, USD/CHF, and USD/CAD. Your analysis must integrate fundamental news events with multi-timeframe technical analysis (H1 and M15).
 
-Your primary goal is to provide a clear, actionable trading plan for a day trader. You must identify the main trend, key support/resistance zones, and potential high-probability entry setups. The output must be concise, structured, and formatted with Markdown for Telegram.
+Your primary goal is to provide a clear, actionable trading plan for a day trader. You must identify the main trend, key support/resistance zones, and potential high-probability entry setups. The output must be concise, structured, and formatted with Markdown for Telegram. Crucially, all trading scenarios must include well-defined TP1 and TP2 targets, with reasoning, and a logical SL area, designed for a 1-2 day holding period.
 """
 
 USER_PROMPT_TEMPLATE = """
@@ -147,23 +150,25 @@ Analyze the market for **{pair}** for today, **{date}**.
 {news_data}
 
 **2. Technical Analysis - H1 Timeframe (Daily Bias & Key Zones):**
-- H1 OHLC Data (last 5 candles): `{h1_ohlc}`
+- H1 OHLC Data (last 5 candles) **(Note: All price data is in 0.1 pips. For example, 1.07543 represents 1.07543, where the '3' is the 0.1 pip unit. A 1-pip movement changes the second to last decimal place.)**: `{h1_ohlc}`
 - H1 Indicators: EMA(20)=`{h1_ema20}`, EMA(50)=`{h1_ema50}`, RSI(14)=`{h1_rsi}`
+- Previous Day's Levels: High=`{prev_day_high}`, Low=`{prev_day_low}`, Close=`{prev_day_close}`
+- Daily Pivot Points: PP=`{daily_pivot_pp}`, R1=`{daily_pivot_r1}`, R2=`{daily_pivot_r2}`, R3=`{daily_pivot_r3}`, S1=`{daily_pivot_s1}`, S2=`{daily_pivot_s2}`, S3=`{daily_pivot_s3}`
 
 **3. Technical Analysis - M15 Timeframe (Precision Entry):**
-- M15 OHLC Data (last 5 candles): `{m15_ohlc}`
+- M15 OHLC Data (last 5 candles) **(Note: All price data is in 0.1 pips. For example, 1.07543 represents 1.07543, where the '3' is the 0.1 pip unit. A 1-pip movement changes the second to last decimal place.)**: `{m15_ohlc}`
 - M15 Indicators: RSI(14)=`{m15_rsi}`
 
 **--- YOUR TASK ---**
 
-Based on ALL the data above, provide the following actionable trading plan, formatted in Markdown for Telegram:
+Based on ALL the data above, provide the following actionable trading plan, formatted in Markdown for Telegram. **The trading scenarios should aim for position closures within 1-2 days, with clear TP1 and TP2 targets.**
 
-* **Overall Daily Bias:** (Bullish / Bearish / Neutral) - And a brief "why" in one sentence.
-* **Key Support Zones:** [List 1-2 important price zones, e.g., `1.0700 - 1.0710`]
-* **Key Resistance Zones:** [List 1-2 important price zones, e.g., `1.0800 - 1.0810`]
-* **High-Probability Trading Scenarios:**
-    * **Bullish Scenario 🐂:** Describe the condition for a LONG entry (e.g., "Wait for a bounce off Support Zone 1 with a bullish confirmation on M15"). Specify a potential TP area and a logical SL area.
-    * **Bearish Scenario 🐻:** Describe the condition for a SHORT entry. Specify a potential TP area and a logical SL area.
+* **Overall Daily Bias:** (Bullish / Bearish / Neutral) - And a brief "why" in one sentence, considering fundamentals and technicals.
+* **Key Support Zones:** [List 1-2 important price zones, e.g., `1.0700 - 1.0710` (mentioning if from Pivot, Prev Day Low, etc.)]
+* **Key Resistance Zones:** [List 1-2 important price zones, e.g., `1.0800 - 1.0810` (mentioning if from Pivot, Prev Day High, etc.)]
+* **High-Probability Trading Scenarios (Aiming for 1-2 day closure):**
+    * **Bullish Scenario 🐂:** Describe the condition for a LONG entry (e.g., "Wait for a bounce off Support Zone 1 with a bullish confirmation on M15, perhaps a bullish candlestick pattern"). Specify **TP1** (e.g., "TP1 at [Price] - targeting [e.g., Daily R1 / Minor H1 Resistance]"), **TP2** (e.g., "TP2 at [Price] - targeting [e.g., Daily R2 / H1 Supply Zone]"), and a logical SL area.
+    * **Bearish Scenario 🐻:** Describe the condition for a SHORT entry. Specify **TP1** (e.g., "TP1 at [Price] - targeting [e.g., Daily S1 / Minor H1 Support]"), **TP2** (e.g., "TP2 at [Price] - targeting [e.g., Daily S2 / H1 Demand Zone]"), and a logical SL area.
 
 Be concise, clear, and direct.
 """
@@ -195,7 +200,7 @@ def send_telegram_message(text):
         print(f"❌ Telegram send failed: {e}")
 
 # ========== Main Workflow ==========
-def analyze_and_send(all_events, pair, data_fetcher):
+def analyze_and_send(all_events, pair, data_fetcher,bot):
     """Analyzes a specific pair using news and technical data, then sends it."""
     print(f"\n===== Analyzing: {pair} =====")
     
@@ -210,10 +215,10 @@ def analyze_and_send(all_events, pair, data_fetcher):
     # 2. ดึงข้อมูล Technical (จากคลาส IQDataFetcher) <<<< แก้ไขตรงนี้
     print(f"⚙️ Fetching REAL technical data for {pair}...")
     tech_data = data_fetcher.get_technical_data(pair)
-    if not tech_data:
-        send_telegram_message(f"⚠️ Could not fetch technical data for *{pair}*. Skipping analysis.")
+    if not tech_data: # ตรวจสอบว่ามีข้อมูล tech_data ครบถ้วนหรือไม่
+        send_telegram_message(f"⚠️ Could not fetch comprehensive technical data for *{pair}*. Skipping analysis.")
         return # ข้ามไปคู่ถัดไป
-    
+
     # 3. สร้าง Prompt ที่สมบูรณ์
     today_date = datetime.now().strftime('%Y-%m-%d')
     user_prompt = USER_PROMPT_TEMPLATE.format(
@@ -224,6 +229,16 @@ def analyze_and_send(all_events, pair, data_fetcher):
         h1_ema20=tech_data["h1_ema20"],
         h1_ema50=tech_data["h1_ema50"],
         h1_rsi=tech_data["h1_rsi"],
+        prev_day_high=tech_data["prev_day_high"], # เพิ่มเข้ามา
+        prev_day_low=tech_data["prev_day_low"],   # เพิ่มเข้ามา
+        prev_day_close=tech_data["prev_day_close"], # เพิ่มเข้ามา
+        daily_pivot_pp=tech_data["daily_pivot_pp"], # เพิ่มเข้ามา
+        daily_pivot_r1=tech_data["daily_pivot_r1"], # เพิ่มเข้ามา
+        daily_pivot_r2=tech_data["daily_pivot_r2"], # เพิ่มเข้ามา
+        daily_pivot_r3=tech_data["daily_pivot_r3"], # เพิ่มเข้ามา
+        daily_pivot_s1=tech_data["daily_pivot_s1"], # เพิ่มเข้ามา
+        daily_pivot_s2=tech_data["daily_pivot_s2"], # เพิ่มเข้ามา
+        daily_pivot_s3=tech_data["daily_pivot_s3"], # เพิ่มเข้ามา
         m15_ohlc=tech_data["m15_ohlc"],
         m15_rsi=tech_data["m15_rsi"]
     )
@@ -235,7 +250,9 @@ def analyze_and_send(all_events, pair, data_fetcher):
     header = f"💎 *Gemini Forex Analysis for {pair}*"
     full_message = f"{header}\n{'-'*20}\n{ai_response}"
     send_telegram_message(full_message)
-    time.sleep(5) # หน่วงเวลาเพื่อไม่ให้ส่งข้อความเร็วเกินไป
+    time.sleep(5)
+    bot.send(full_message)
+    time.sleep(5)
 
 if __name__ == '__main__':
     print("🚀 Starting Forex Analysis Bot...")
@@ -243,6 +260,9 @@ if __name__ == '__main__':
     # สร้าง Instance ของ Data Fetcher
     print("Initializing data connection...")
     data_fetcher = IQDataFetcher()
+    analyzer = TyphoonForexAnalyzer(TYPHOON_API_KEY)
+    notifier = TelegramNotifier(SIGNAL_TOKEN, CHAT_ID)
+    bot_tele = ForexBot(analyzer, notifier)
     # เช็คว่าเชื่อมต่อสำเร็จไหม
     if data_fetcher.api is None:
         send_telegram_message("❌ Bot could not connect to IQ Option. Shutting down.")
@@ -268,7 +288,7 @@ if __name__ == '__main__':
 
     for pair in target_pairs:
         # ไม่ว่าจะมีข่าวหรือไม่ ก็ให้ทำงานต่อไป
-        analyze_and_send(all_events, pair, data_fetcher)
+        analyze_and_send(all_events, pair, data_fetcher,bot_tele)
 
     data_fetcher.close_connection()  
     print("\n✅ All pairs analyzed. Script finished.")
