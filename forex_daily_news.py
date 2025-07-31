@@ -181,17 +181,18 @@ Bullish Scenario 🐂: Describe the condition for a LONG entry (e.g., "Wait for 
 
 Bearish Scenario 🐻: Describe the condition for a SHORT entry. Specify TP1 (e.g., "TP1 at [Price] - targeting [e.g., Daily S1 / Minor H1 Support]"), TP2 (e.g., "TP2 at [Price] - targeting [e.g., Daily S2 / H1 Demand Zone]"), and a logical SL area.
 
-Recommended Order Type for Today (Choose only TWO most probable out of Buy Stop, Buy Limit, Sell Stop, Sell Limit):
+Recommended Order Type for Today (Choose only ONE most probable out of Buy Stop, Buy Limit, Sell Stop, Sell Limit) and Plan B if actually not follow the analysis:
 
-[Order Type 1]: [Price Level] 
+[Order Type]: [Price Level] 
 TP1: [Price] 
 TP2: [Price]
 SL: [Price]
 
-[Order Type 2]: [Price Level]
-TP1: [Price] 
-TP2: [Price]
+Plan B : [event]
+[Order Type]: [Price Level]
+TP: [Price]
 SL: [Price]
+
 Be concise, clear, and direct.
 """
 
