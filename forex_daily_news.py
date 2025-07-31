@@ -219,6 +219,10 @@ def analyze_and_send(all_events, pair, data_fetcher,bot):
 
     # 3. สร้าง Prompt ที่สมบูรณ์
     today_date = datetime.now().strftime('%Y-%m-%d')
+    # คำนวณเวลาปัจจุบันในโซนประเทศไทย (ICT)
+    current_ict_time = datetime.utcnow() + timedelta(hours=7)
+    current_time_str = current_ict_time.strftime('%Y-%m-%d %H:%M:%S ICT')
+
     user_prompt = USER_PROMPT_TEMPLATE.format(
         pair=pair,
         date=today_date,
@@ -240,7 +244,8 @@ def analyze_and_send(all_events, pair, data_fetcher,bot):
         m15_ohlc=tech_data["m15_ohlc"],
         m15_rsi=tech_data["m15_rsi"],
         m15_ema20=tech_data["m15_ema20"],
-        m15_ema50=tech_data["m15_ema50"]
+        m15_ema50=tech_data["m15_ema50"],
+        current_time=current_time_str
     )
     
     # 4. เรียก Gemini API
