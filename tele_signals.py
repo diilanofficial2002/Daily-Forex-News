@@ -16,17 +16,18 @@ class TyphoonForexAnalyzer:
 
     Use the following format only:
 
-    **Currency:**  
-    **Support Zones:**  
-    **Resistance Zones:**  
+    **Currency:** 
 
     **Today order:**  
     [Order type]:[price level]
-    - TP1: (price and pip difference from order)  
-    - TP2: (price and pip difference from order, if available)  
-    - SL: (price and pip difference from order)  
+    - TP1: (price and pip absolute difference from order price)  
+    - TP2: (price and pip absolute difference from order price, if available)  
+    - SL: (price and pip absolute difference from order price)
 
-    ...
+    **Plan B:**
+    [Order type]:[price level]
+    - TP: (price and pip absolute difference from order price) 
+    - SL: (price and pip absolute difference from order price)
 
     Here is the analysis:
     {analysis_text}
