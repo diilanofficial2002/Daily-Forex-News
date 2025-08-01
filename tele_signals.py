@@ -8,30 +8,33 @@ class TyphoonForexAnalyzer:
         self.endpoint = f"{self.base_url}/chat/completions"
 
     def build_prompt(self, analysis_text):
+        # Prompt นี้จะเน้นให้กระชับและตรงประเด็นมากขึ้น
         return f"""
-        You must extract only the trading plan details from the provided analysis and structure them precisely as specified below. Do not include any additional commentary, explanations, or introductory/concluding remarks.
-    
-        **Pip Calculation Rules:**
-        - For JPY pairs (e.g., USD/JPY, EUR/JPY), 1 pip = 0.01.
-        - For all other pairs (e.g., EUR/USD, GBP/USD), 1 pip = 0.0001.
-        - All pip differences must be calculated as the **absolute difference from the identified Entry Price**.
-    
-        **Output Format (Strictly Adhere):**
-    
-        **Currency:** [Currency Pair, e.g., EUR/USD]
-    
-        **Primary Trading Plan:**
-        [Order Type, e.g., BUY or SELL]: [Entry Price Level, e.g., 1.07540]
-        - TP1: [Target Price Level, e.g., 1.07680] ([Absolute Pip Difference from Entry, e.g., +14 pips])
-        - TP2: [Target Price Level, e.g., 1.07750] ([Absolute Pip Difference from Entry, e.g., +21 pips]) (If available, otherwise omit)
-        - SL: [Stop Loss Price Level, e.g., 1.07450] ([Absolute Pip Difference from Entry, e.g., -9 pips])
-    
-        **Secondary Trading Plan (Optional):**
-        [Order Type, e.g., SELL or BUY]: [Entry Price Level, e.g., 1.07300]
-        - TP1: [Target Price Level, e.g., 1.07100] ([Absolute Pip Difference from Entry, e.g., -20 pips])
-        - SL: [Stop Loss Price Level, e.g., 1.07400] ([Absolute Pip Difference from Entry, e.g., +10 pips])
-        (If no secondary plan or "No Trade" is recommended in the analysis, this section should be omitted entirely or stated as "No secondary plan available.")
-    
+        You are a highly concise formatter. Extract ONLY the essential intraday trading plan details from the provided analysis. Remove all unnecessary words, explanations, or filler phrases. Adhere strictly to the specified format below.
+
+        **Output Format (Strictly Adhere - Minimize Text):**
+
+        **PAIR:** [Currency Pair, e.g., EUR/USD]
+        **BIAS:** [Overall Intraday Bias, e.g., Bullish / Bearish / Neutral / Range-bound]
+
+        **KEY ZONES:**
+        - **SUPPORTS:** [List 1-2 important price zones, e.g., 1.0700-1.0710 (Pivot)]
+        - **RESISTANCES:** [List 1-2 important price zones, e.g., 1.0800-1.0810 (Daily R1)]
+
+        **TRADING SETUPS (Same-Day Close):**
+
+        🐂 **BULLISH:**
+        - **ENTRY:** [Specific conditions for LONG entry, CONCISE. e.g., "Price rejects 1.0700-1.0710 (Support) with M5/M15 bullish engulfing candle & RSI confirms momentum, MACD crossover/divergence, or increasing volume."]
+        - **TP:** [Logical Profit Target Area, CONCISE. e.g., "Towards 1.0750-1.0760 (Resistance/R1)."]
+        - **SL:** [Logical Stop Loss Area, CONCISE. e.g., "Below 1.0690 (Invalidates setup)."]
+
+        🐻 **BEARISH:**
+        - **ENTRY:** [Specific conditions for SHORT entry, CONCISE. e.g., "Price tests 1.0800-1.0810 (Resistance) with M5/M15 bearish rejection, RSI overbought/turning down, MACD crossover/divergence, or increasing volume."]
+        - **TP:** [Logical Profit Target Area, CONCISE. e.g., "Towards 1.0750-1.0740 (Support/S1)."]
+        - **SL:** [Logical Stop Loss Area, CONCISE. e.g., "Above 1.0820 (Invalidates setup)."]
+
+        **CONSIDERATIONS:** [1-2 critical points for the day, CONCISE. e.g., "Expect volatility around [Time of News Event] - adjust size or avoid." If no specific considerations, state "None.""]
+
         Here is the analysis to extract data from:
         {analysis_text}
         """
@@ -41,7 +44,7 @@ class TyphoonForexAnalyzer:
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": "You are a formatter assistant. Never include any sentence outside the structure."},
+                {"role": "system", "content": "You are a formatter assistant. Never include any sentence outside the structure and be extremely concise."}, # เพิ่มคำสั่งให้กระชับมากยิ่งขึ้นใน system role
                 {"role": "user", "content": prompt}
             ],
             "max_tokens": max_tokens,
