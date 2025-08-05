@@ -8,43 +8,60 @@ class TyphoonForexAnalyzer:
         self.endpoint = f"{self.base_url}/chat/completions"
 
     def build_prompt(self, analysis_text):
-        # Prompt นี้จะเน้นให้กระชับและตรงประเด็นมากขึ้น
         return f"""
-        You are a highly concise formatter. Extract ONLY the essential intraday trading plan details from the provided analysis. Remove all unnecessary words, explanations, or filler phrases. Adhere strictly to the specified format below.
+        Extract the essential intraday trading plan from the following analysis. Focus on actionable information only.
 
-        **Output Format (Strictly Adhere - Minimize Text):**
+        **ANALYSIS TO PROCESS:**
+        {analysis_text}
 
-        **PAIR:** [Currency Pair, e.g., EUR/USD]
-        **BIAS:** [Overall Intraday Bias, e.g., Bullish / Bearish / Neutral / Range-bound]
+        **REQUIRED OUTPUT FORMAT (STRICT ADHERENCE):**
+
+        **PAIR:** [Currency Pair]
+        **DATE:** [Trading Date]  
+        **BIAS:** [Bullish/Bearish/Neutral/Range-bound] - [Ultra-brief rationale]
 
         **KEY ZONES:**
-        - **SUPPORTS:** [List 1-2 important price zones, e.g., 1.0700-1.0710 (Pivot)]
-        - **RESISTANCES:** [List 1-2 important price zones, e.g., 1.0800-1.0810 (Daily R1)]
+        **SUPPORTS:** [Zone 1: Price-Source] | [Zone 2: Price-Source] (if applicable)
+        **RESISTANCES:** [Zone 1: Price-Source] | [Zone 2: Price-Source] (if applicable)
 
-        **TRADING SETUPS (Same-Day Close):**
+        **SETUPS (SAME-DAY CLOSE):**
+        🐂 **LONG SETUP:**
+        **ENTRY:** [Precise conditions - max 25 words]
+        **TP:** [Target zone with brief rationale - max 15 words]  
+        **SL:** [Stop zone with brief rationale - max 15 words]
 
-        🐂 **BULLISH:**
-        - **ENTRY:** [Specific conditions for LONG entry, CONCISE. e.g., "Price rejects 1.0700-1.0710 (Support) with M5/M15 bullish engulfing candle & RSI confirms momentum, MACD crossover/divergence, or increasing volume."]
-        - **TP:** [Logical Profit Target Area, CONCISE. e.g., "Towards 1.0750-1.0760 (Resistance/R1)."]
-        - **SL:** [Logical Stop Loss Area, CONCISE. e.g., "Below 1.0690 (Invalidates setup)."]
+        🐻 **SHORT SETUP:**
+        **ENTRY:** [Precise conditions - max 25 words]
+        **TP:** [Target zone with brief rationale - max 15 words]
+        **SL:** [Stop zone with brief rationale - max 15 words]  
 
-        🐻 **BEARISH:**
-        - **ENTRY:** [Specific conditions for SHORT entry, CONCISE. e.g., "Price tests 1.0800-1.0810 (Resistance) with M5/M15 bearish rejection, RSI overbought/turning down, MACD crossover/divergence, or increasing volume."]
-        - **TP:** [Logical Profit Target Area, CONCISE. e.g., "Towards 1.0750-1.0740 (Support/S1)."]
-        - **SL:** [Logical Stop Loss Area, CONCISE. e.g., "Above 1.0820 (Invalidates setup)."]
+        **RISK ALERTS:** [Critical timing/volatility warnings - max 30 words total, or "None"]
 
-        **CONSIDERATIONS:** [1-2 critical points for the day, CONCISE. e.g., "Expect volatility around [Time of News Event] - adjust size or avoid." If no specific considerations, state "None.""]
+        **INSTRUCTIONS:**
+        - Preserve exact price levels and technical conditions
+        - Eliminate all unnecessary words while maintaining meaning
+        - If any section lacks clear information in the analysis, state "Insufficient data"
+        - Prioritize actionability over explanation
+        """
+    
+    def system_prompter(self):
+        return """
+        You are a precision formatter specializing in extracting essential trading information from comprehensive market analysis. Your task is to distill complex analysis into ultra-concise, actionable trading plans while preserving all critical decision-making information.
 
-        Here is the analysis to extract data from:
-        {analysis_text}
+        **Key Requirements:**
+        - Extract ONLY essential information needed for trading decisions
+        - Maintain precision in price levels and conditions
+        - Preserve logical rationale in condensed form
+        - Ensure output is immediately actionable for traders
+        - Eliminate redundancy and filler language
         """
 
-    def analyze(self, analysis_text, max_tokens=3072, temperature=0.3):
+    def analyze(self, analysis_text, max_tokens=2048, temperature=0.3):
         prompt = self.build_prompt(analysis_text)
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": "You are a formatter assistant. Never include any sentence outside the structure and be extremely concise."}, # เพิ่มคำสั่งให้กระชับมากยิ่งขึ้นใน system role
+                {"role": "system", "content": self.system_prompter()}, 
                 {"role": "user", "content": prompt}
             ],
             "max_tokens": max_tokens,

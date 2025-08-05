@@ -1,3 +1,4 @@
+# forex_daily_news.py
 # ========== Import Libraries ==========
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
@@ -132,62 +133,90 @@ safety_settings = [
     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
 ]
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-pro-latest",
+    model_name="gemini-2.5-flash-lite",
     generation_config=generation_config,
     safety_settings=safety_settings
 )
 
 SYSTEM_PROMPT = """
-You are a world-class Forex market analyst and strategist, specializing in **true Day Trading** for major currency pairs like EUR/USD, USD/JPY, USD/CHF, and USD/CAD. Day Trading, in this context, means opening and closing positions **within the same trading day (typically holding for minutes to several hours), aiming for significant intraday moves, distinct from ultra-short-term scalping (seconds to very few minutes).** Your analysis must integrate fundamental news events with multi-timeframe technical analysis (H1 for overall context, M15/M5 for precision entry/exit).
+You are a world-class Forex market analyst specializing in **intraday trading** for major currency pairs. Your role is to provide comprehensive market analysis that will be processed into actionable trading plans.
 
-Your primary goal is to provide a clear, **actionable framework for intraday trading decisions, specifically targeting sustained movements within the trading day.** You must identify the prevalent **intraday trend, key intraday support/resistance zones, and specific, high-probability entry/exit conditions that signal a potential for a meaningful intraday move.**
+**Core Requirements:**
+- Focus on TRUE day trading (positions closed same day, holding minutes to hours)
+- Target meaningful intraday moves (20-50+ pips potential)
+- Integrate fundamental news with multi-timeframe technical analysis
+- Provide structured analysis optimized for downstream formatting
 
-Crucially, **all trading scenarios must strictly adhere to the principle of position closure within the same trading day.** Do NOT suggest any holding periods extending beyond the current trading session. Focus on providing **logical profit-taking areas and robust stop-loss placement based on market structure, volatility, and the potential for a day trading typical move (e.g., 20-50+ pips),** emphasizing the rationale behind these levels without giving fixed numbers. Your output must be concise, structured, and formatted with Markdown for Telegram.
+**Analysis Framework:**
+1. Economic events impact assessment with specific timing considerations
+2. Multi-timeframe technical confluence (H1 context, M15/M5 precision)
+3. Clear intraday bias determination with supporting rationale
+4. Precise support/resistance zones with source identification
+5. Specific entry/exit conditions with logical stop/target placement
+
+**Output Structure:** Your analysis must be organized in clearly labeled sections that can be easily parsed for key information extraction.
 """
 
 USER_PROMPT_TEMPLATE = """
-Analyze the market for {pair} for today, {date}.
+Analyze {pair} for intraday trading on {date}.
 
-1.  **High-Impact Economic Events (Fundamental Context for Intraday Volatility):**
-    {news_data}
+**INPUT DATA:**
+1. **Economic Events:** {news_data}
+2. **H1 Technical Data:**
+   - OHLC (last 5): {h1_ohlc}
+   - Indicators: EMA(20)={h1_ema20}, EMA(50)={h1_ema50}, RSI(14)={h1_rsi}, MACD={h1_macd}, MACD_Hist={h1_macdh}, MACD_Signal={h1_macds}
+   - Previous Day: High={prev_day_high}, Low={prev_day_low}, Close={prev_day_close}
+   - Daily Pivots: PP={daily_pivot_pp}, R1={daily_pivot_r1}, R2={daily_pivot_r2}, R3={daily_pivot_r3}, S1={daily_pivot_s1}, S2={daily_pivot_s2}, S3={daily_pivot_s3}
+3. **M15 Technical Data:**
+   - OHLC (last 5): {m15_ohlc}
+   - Indicators: EMA(20)={m15_ema20}, EMA(50)={m15_ema50}, RSI(14)={m15_rsi}, MACD={m15_macd}, MACD_Hist={m15_macdh}, MACD_Signal={m15_macds}
+4. **M5 Technical Data:**
+   - OHLC (last 5): {m5_ohlc}
+   - Indicators: EMA(20)={m5_ema20}, EMA(50)={m5_ema50}, RSI(14)={m5_rsi}, MACD={m5_macd}, MACD_Hist={m5_macdh}, MACD_Signal={m5_macds}
 
-2.  **Technical Analysis - H1 Timeframe (Intraday Bias & Key Zones):**
-    * H1 OHLC Data (last 5 candles) (Note: All price data is in 0.1 pips. For example, 1.07543 represents 1.07543, where the '3' is the 0.1 pip unit. A 1-pip movement changes the second to last decimal place. **OHLC data also includes 'volume' for each candle.**): {h1_ohlc}
-    * H1 Indicators: EMA(20)={h1_ema20}, EMA(50)={h1_ema50}, RSI(14)={h1_rsi}, MACD={h1_macd}, MACD Histogram={h1_macdh}, MACD Signal={h1_macds}
-    * Previous Day's Levels: High={prev_day_high}, Low={prev_day_low}, Close={prev_day_close}
-    * Daily Pivot Points: PP={daily_pivot_pp}, R1={daily_pivot_r1}, R2={daily_pivot_r2}, R3={daily_pivot_r3}, S1={daily_pivot_s1}, S2={daily_pivot_s2}, S3={daily_pivot_s3}
+Current Time: {current_time}
 
-3.  **Technical Analysis - M15 Timeframe (Intraday Precision & Triggers):**
-    * M15 OHLC Data (last 5 candles) (**OHLC data also includes 'volume' for each candle.**): {m15_ohlc}
-    * M15 Indicators: EMA(20)={m15_ema20}, EMA(50)={m15_ema50}, RSI(14)={m15_rsi}, MACD={m15_macd}, MACD Histogram={m15_macdh}, MACD Signal={m15_macds}
+**REQUIRED OUTPUT FORMAT:**
 
-4.  **Technical Analysis - M5 Timeframe (Finer Precision & Entry Confirmation):**
-    * M5 OHLC Data (last 5 candles) (**OHLC data also includes 'volume' for each candle.**): {m5_ohlc}
-    * M5 Indicators: EMA(20)={m5_ema20}, EMA(50)={m5_ema50}, RSI(14)={m5_rsi}, MACD={m5_macd}, MACD Histogram={m5_macdh}, MACD Signal={m5_macds}
+## 📊 MARKET OVERVIEW
+**Currency Pair:** {pair}
+**Analysis Date:** {date}
+**Overall Intraday Bias:** [Bullish/Bearish/Neutral/Range-bound]
+**Bias Rationale:** [One clear sentence explaining why, combining fundamental and technical factors]
 
-Current time (for reference): {current_time}
+## ⏰ NEWS IMPACT TIMELINE
+[For each significant event, format as:]
+**[Time] - [Currency] - [Event] - [Impact Level]**
+- **Expected Behavior:** [How market likely to behave around this time]
+- **Trading Caution:** [Specific risks/considerations for day traders]
 
---- YOUR TASK ---
-Based on ALL the data above, provide the following actionable intraday trading framework, formatted in Markdown for Telegram. **Remember: ALL positions must be closed within the current trading day.**
+## 🎯 KEY INTRADAY ZONES
+**Critical Support Zones:**
+- **Zone 1:** [Price Range] - [Source: e.g., Daily S1, Previous Low, Technical Level]
+- **Zone 2:** [Price Range] - [Source] (if applicable)
 
-**Overall Intraday Bias:** (Bullish / Bearish / Neutral / Range-bound) - And a brief "why" in one sentence, considering fundamentals (expected volatility from news) and technicals across H1/M15/M5.
+**Critical Resistance Zones:**
+- **Zone 1:** [Price Range] - [Source: e.g., Daily R1, Previous High, Technical Level]  
+- **Zone 2:** [Price Range] - [Source] (if applicable)
 
-**Key Intraday Support Zones:** [List 1-2 important price zones for today, e.g., 1.0700 - 1.0710 (mentioning if from Pivot, Prev Day Low, etc.)]
-**Key Intraday Resistance Zones:** [List 1-2 important price zones for today, e.g., 1.0800 - 1.0810 (mentioning if from Pivot, Prev Day High, etc.)]
+## 📈 BULLISH SCENARIO ANALYSIS
+**Entry Conditions:** [Specific multi-timeframe conditions for LONG entry - be precise about candlestick patterns, indicator signals, zone interactions]
+**Profit Target Logic:** [Price zone with clear rationale based on structure/levels]
+**Stop Loss Logic:** [Price zone with clear invalidation rationale]
+**Risk Assessment:** [Key factors that could invalidate this setup]
 
-**High-Probability Intraday Trading Scenarios (For same-day closure):**
+## 📉 BEARISH SCENARIO ANALYSIS  
+**Entry Conditions:** [Specific multi-timeframe conditions for SHORT entry - be precise about candlestick patterns, indicator signals, zone interactions]
+**Profit Target Logic:** [Price zone with clear rationale based on structure/levels]
+**Stop Loss Logic:** [Price zone with clear invalidation rationale]  
+**Risk Assessment:** [Key factors that could invalidate this setup]
 
-🐂 **Bullish Setup Condition:** Describe the **specific conditions for a LONG entry** (e.g., "Price rejects Key Intraday Support Zone 1 (1.0700-1.0710) with a strong M5/M15 bullish engulfing candle AND M5/M15 RSI confirms upward momentum, potentially supported by MACD crossover/divergence and/or increasing volume").
-    * **Logical Profit Target Area:** [Price Zone, e.g., "Towards 1.0750 - 1.0760 (Intraday Resistance / Pivot R1)"] - Explain the **rationale** (e.g., "based on proximity to next significant resistance").
-    * **Logical Stop Loss Area:** [Price Zone, e.g., "Below 1.0690"] - Explain the **rationale** (e.g., "just below the confirmed support zone / swing low to invalidate the setup").
+## ⚠️ CRITICAL CONSIDERATIONS
+**High-Risk Periods:** [Specific times to avoid trading or exercise extra caution]
+**Volume/Volatility Expectations:** [Expected market behavior patterns for the day]
+**Key Decision Points:** [Critical levels or times that will determine market direction]
 
-🐻 **Bearish Setup Condition:** Describe the **specific conditions for a SHORT entry** (e.g., "Price tests Key Intraday Resistance Zone 1 (1.0800-1.0810) and shows clear M5/M15 bearish rejection, perhaps a shooting star or pin bar, AND M5/M15 RSI is overbought/turning down, potentially supported by MACD crossover/divergence and/or increasing volume").
-    * **Logical Profit Target Area:** [Price Zone, e.g., "Towards 1.0750 - 1.0740 (Intraday Support / Pivot S1)"] - Explain the **rationale**.
-    * **Logical Stop Loss Area:** [Price Zone, e.g., "Above 1.0820"] - Explain the **rationale**.
-
-**Key Considerations for Today:** [Add 1-2 critical points for the day, e.g., "Expect increased volatility around [Time of News Event] - consider reducing position size or avoiding trades during that window."]
-
-Be concise, clear, and directly actionable for immediate intraday trading decisions.
+Ensure all analysis supports same-day position closure and focuses on actionable intraday opportunities.
 """
 
 def call_gemini_api(user_prompt):
@@ -217,18 +246,18 @@ def send_telegram_message(text):
         print(f"❌ Telegram send failed: {e}")
 
 # ========== Main Workflow ==========
-def analyze_and_send(all_events, pair, data_fetcher,bot):
+def analyze_and_send(all_events, pair, data_fetcher, bot):
     """Analyzes a specific pair using news and technical data, then sends it."""
     print(f"\n===== Analyzing: {pair} =====")
     
-    # 1. กรองข่าวที่เกี่ยวข้องกับคู่เงิน
+    # 1. กรองข่าวที่เกี่ยวข้องกับคู่เงิน (รับทุก Impact)
     currencies = pair.split('/')
     relevant_news = [
         event for event in all_events 
-        if event['Currency'] in currencies and "High" in event.get('Impact', '')
+        if event['Currency'] in currencies and event.get('Impact') # รับทุก event ที่มีสกุลเงินตรงกันและมีค่า Impact
     ]
-    news_data_str = json.dumps(relevant_news, indent=2) if relevant_news else "No high-impact news scheduled for this pair."
-    
+    news_data_str = json.dumps(relevant_news, indent=2) if relevant_news else "No relevant news scheduled for this pair today."
+
     # 2. ดึงข้อมูล Technical (จากคลาส IQDataFetcher)
     print(f"⚙️ Fetching REAL technical data for {pair}...")
     tech_data = data_fetcher.get_technical_data(pair)
@@ -283,14 +312,16 @@ def analyze_and_send(all_events, pair, data_fetcher,bot):
     # 4. เรียก Gemini API
     ai_response = call_gemini_api(user_prompt)
 
+    time.sleep(2)
+
     # header = f"💎 *Gemini Forex Analysis for {pair}*"
     full_message = f"{pair}\n{'-'*20}\n{ai_response}"
     send_telegram_message(full_message)
-    time.sleep(5)
+    time.sleep(4)
     
     # 5. ส่งผลลัพธ์ไปที่ Telegram (ปรับแก้เพื่อให้ TyphoonForexAnalyzer สรุปก่อน)
     bot.send(ai_response) # ส่ง raw_analysis_text ไปให้ bot.send ซึ่งจะเรียก Typhoon Analyzer
-    time.sleep(5)
+    time.sleep(4)
 
 if __name__ == '__main__':
     print("🚀 Starting Forex Analysis Bot...")
@@ -315,7 +346,7 @@ if __name__ == '__main__':
         print(f"📰 Scraped {len(all_events)} total events.")
 
     # 2. ตั้งค่าคู่เงินที่ต้องการวิเคราะห์
-    target_pairs = ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "USD/CAD"]
+    target_pairs = ["EUR/USD", "GBP/USD", "USD/JPY", "EUR/GBP", "EUR/CHF"]
     
     # 3. วนลูปเพื่อวิเคราะห์และส่งข้อมูลทีละคู่เงิน
     now_ict = datetime.utcnow() + timedelta(hours=7)
