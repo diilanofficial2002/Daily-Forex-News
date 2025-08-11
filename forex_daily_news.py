@@ -6,7 +6,7 @@ import requests
 import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-import google.generativeai as genai
+from openai import OpenAI
 import os
 import json
 
@@ -112,6 +112,7 @@ def scrape_forex_factory_requests():
 
 # ========== Gemini AI and Telegram Functions ==========
 # Config
+client = OpenAI()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TYPHOON_API_KEY = os.getenv("TYPHOON_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -119,120 +120,127 @@ SIGNAL_TOKEN = os.getenv("SIGNAL_BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 # ตั้งค่า Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-generation_config = {
-  "temperature": 0.4,
-  "top_p": 1,
-  "top_k": 1,
-  "max_output_tokens": 4096,
-}
-safety_settings = [
-    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-]
-model = genai.GenerativeModel(
-    model_name="gemini-2.5-flash-lite",
-    generation_config=generation_config,
-    safety_settings=safety_settings
-)
 
 SYSTEM_PROMPT = """
-You are a world-class Forex market analyst specializing in **intraday trading** for major currency pairs. Your role is to provide comprehensive market analysis that will be processed into actionable trading plans.
+You are an intraday FX analyst focused on same-day trades (minutes to hours).
+Your job is to combine ECONOMIC EVENTS with MULTI-TIMEFRAME TECHNICALS and
+produce a tightly structured analysis that downstream tools will parse.
 
-**Core Requirements:**
-- Focus on TRUE day trading (positions closed same day, holding minutes to hours)
-- Target meaningful intraday moves (20-50+ pips potential)
-- Integrate fundamental news with multi-timeframe technical analysis
-- Provide structured analysis optimized for downstream formatting
+Operating assumptions (do not violate):
+- Timezone is Asia/Bangkok (ICT). Treat all times as ICT unless stated.
+- Do not invent data. Use only inputs provided.
+- Write in clear, concise English. Avoid emojis, filler, and disclaimers.
+- Keep headings EXACT. Keep each bullet short and action-oriented.
+- For price formatting: non-JPY pairs to 5 decimals (e.g., 1.08520), JPY pairs to 3 decimals (e.g., 148.230).
+- If required info is missing, write "Insufficient data" at that field.
+- Output must fit within ~900 tokens.
 
-**Analysis Framework:**
-1. Economic events impact assessment with specific timing considerations
-2. Multi-timeframe technical confluence (H1 context, M15/M5 precision)
-3. Clear intraday bias determination with supporting rationale
-4. Precise support/resistance zones with source identification
-5. Specific entry/exit conditions with logical stop/target placement
+Required sections and exact headings:
+1) ## OVERVIEW
+   - Date (ICT): ...
+   - Pair: ...
+   - Context: [15–35 words tying news to current structure]
 
-**Output Structure:** Your analysis must be organized in clearly labeled sections that can be easily parsed for key information extraction.
+2) ## BIAS
+   - Intraday Bias: [Bullish/Bearish/Neutral/Range-bound] — [≤15-word rationale]
+
+3) ## KEY LEVELS
+   - Supports: [Zone 1: price-source] | [Zone 2: price-source]
+   - Resistances: [Zone 1: price-source] | [Zone 2: price-source]
+
+4) ## SETUPS (SAME-DAY CLOSE)
+   ### LONG
+   - Entry: [precise multi-TF condition incl. levels]
+   - TP: [...]
+   - SL: [...]
+   - Risk: [main invalidation factors]
+   ### SHORT
+   - Entry: [...]
+   - TP: [...]
+   - SL: [...]
+   - Risk: [...]
+
+5) ## RISK ALERTS
+   - [events/time-windows or structure that can flip bias; ≤40 words]
+
+Analysis method:
+- Economic events: judge timing vs current time (pre/post), currency relevance, surprise vs forecast, and spillovers to the pair.
+- Technicals: use H1 for context, M15/M5 for triggers; align with pivots/prev day H/L; confirm with EMA(20/50), RSI(14), MACD.
+- Be specific about price interaction with zones and candle behavior.
 """
 
 USER_PROMPT_TEMPLATE = """
-Analyze {pair} for intraday trading on {date}.
+Analyze {pair} for intraday trading on {date} (ICT).
 
-**INPUT DATA:**
-1. **Economic Events:** {news_data}
-2. **H1 Technical Data:**
-   - OHLC (last 5): {h1_ohlc}
-   - Indicators: EMA(20)={h1_ema20}, EMA(50)={h1_ema50}, RSI(14)={h1_rsi}, MACD={h1_macd}, MACD_Hist={h1_macdh}, MACD_Signal={h1_macds}
-   - Previous Day: High={prev_day_high}, Low={prev_day_low}, Close={prev_day_close}
-   - Daily Pivots: PP={daily_pivot_pp}, R1={daily_pivot_r1}, R2={daily_pivot_r2}, R3={daily_pivot_r3}, S1={daily_pivot_s1}, S2={daily_pivot_s2}, S3={daily_pivot_s3}
-3. **M15 Technical Data:**
-   - OHLC (last 5): {m15_ohlc}
-   - Indicators: EMA(20)={m15_ema20}, EMA(50)={m15_ema50}, RSI(14)={m15_rsi}, MACD={m15_macd}, MACD_Hist={m15_macdh}, MACD_Signal={m15_macds}
-4. **M5 Technical Data:**
-   - OHLC (last 5): {m5_ohlc}
-   - Indicators: EMA(20)={m5_ema20}, EMA(50)={m5_ema50}, RSI(14)={m5_rsi}, MACD={m5_macd}, MACD_Hist={m5_macdh}, MACD_Signal={m5_macds}
+### INPUT DATA
+1) Economic Events (ICT):
+{news_data}
 
-Current Time: {current_time}
+2) H1 Technicals
+- OHLC (last 5): {h1_ohlc}
+- EMA20={h1_ema20}, EMA50={h1_ema50}, RSI14={h1_rsi}, MACD={h1_macd}, MACD_Hist={h1_macdh}, MACD_Signal={h1_macds}
+- Previous Day: High={prev_day_high}, Low={prev_day_low}, Close={prev_day_close}
+- Daily Pivots: PP={daily_pivot_pp}, R1={daily_pivot_r1}, R2={daily_pivot_r2}, R3={daily_pivot_r3}, S1={daily_pivot_s1}, S2={daily_pivot_s2}, S3={daily_pivot_s3}
 
-**REQUIRED OUTPUT FORMAT:**
+3) M15 Technicals
+- OHLC (last 5): {m15_ohlc}
+- EMA20={m15_ema20}, EMA50={m15_ema50}, RSI14={m15_rsi}, MACD={m15_macd}, MACD_Hist={m15_macdh}, MACD_Signal={m15_macds}
 
-## 📊 MARKET OVERVIEW
-**Currency Pair:** {pair}
-**Analysis Date:** {date}
-**Overall Intraday Bias:** [Bullish/Bearish/Neutral/Range-bound]
-**Bias Rationale:** [One clear sentence explaining why, combining fundamental and technical factors]
+4) M5 Technicals
+- OHLC (last 5): {m5_ohlc}
+- EMA20={m5_ema20}, EMA50={m5_ema50}, RSI14={m5_rsi}, MACD={m5_macd}, MACD_Hist={m5_macdh}, MACD_Signal={m5_macds}
 
-## ⏰ NEWS IMPACT TIMELINE
-[For each significant event, format as:]
-**[Time] - [Currency] - [Event] - [Impact Level]**
-- **Expected Behavior:** [How market likely to behave around this time]
-- **Trading Caution:** [Specific risks/considerations for day traders]
+Current Time (ICT): {current_time}
 
-## 🎯 KEY INTRADAY ZONES
-**Critical Support Zones:**
-- **Zone 1:** [Price Range] - [Source: e.g., Daily S1, Previous Low, Technical Level]
-- **Zone 2:** [Price Range] - [Source] (if applicable)
+### REQUIRED OUTPUT FORMAT (STRICT)
+## OVERVIEW
+- Date (ICT): ...
+- Pair: ...
+- Context: ...
 
-**Critical Resistance Zones:**
-- **Zone 1:** [Price Range] - [Source: e.g., Daily R1, Previous High, Technical Level]  
-- **Zone 2:** [Price Range] - [Source] (if applicable)
+## BIAS
+- Intraday Bias: ...
 
-## 📈 BULLISH SCENARIO ANALYSIS
-**Entry Conditions:** [Specific multi-timeframe conditions for LONG entry - be precise about candlestick patterns, indicator signals, zone interactions]
-**Profit Target Logic:** [Price zone with clear rationale based on structure/levels]
-**Stop Loss Logic:** [Price zone with clear invalidation rationale]
-**Risk Assessment:** [Key factors that could invalidate this setup]
+## KEY LEVELS
+- Supports: ...
+- Resistances: ...
 
-## 📉 BEARISH SCENARIO ANALYSIS  
-**Entry Conditions:** [Specific multi-timeframe conditions for SHORT entry - be precise about candlestick patterns, indicator signals, zone interactions]
-**Profit Target Logic:** [Price zone with clear rationale based on structure/levels]
-**Stop Loss Logic:** [Price zone with clear invalidation rationale]  
-**Risk Assessment:** [Key factors that could invalidate this setup]
+## SETUPS (SAME-DAY CLOSE)
+### LONG
+- Entry: ...
+- TP: ...
+- SL: ...
+- Risk: ...
+### SHORT
+- Entry: ...
+- TP: ...
+- SL: ...
+- Risk: ...
 
-## ⚠️ CRITICAL CONSIDERATIONS
-**High-Risk Periods:** [Specific times to avoid trading or exercise extra caution]
-**Volume/Volatility Expectations:** [Expected market behavior patterns for the day]
-**Key Decision Points:** [Critical levels or times that will determine market direction]
-
-Ensure all analysis supports same-day position closure and focuses on actionable intraday opportunities.
+## RISK ALERTS
+- ...
 """
 
-def call_gemini_api(user_prompt):
-    """Calls the Gemini API with the structured prompt."""
-    print("🛰️  Calling Gemini API...")
+def call_gpt_api(user_prompt: str) -> str:
+    """
+    Call GPT-5 mini for intraday analysis.
+    - Use 'instructions' for system prompt (cheaper + cache-friendly).
+    - Use 'input' for the full user prompt.
+    """
     try:
-        convo = model.start_chat(history=[
-            {'role': 'user', 'parts': [SYSTEM_PROMPT]},
-            {'role': 'model', 'parts': ["Acknowledged. I am ready to analyze the provided market data."]}
-        ])
-        convo.send_message(user_prompt)
-        print("✅ Gemini response received.")
-        return convo.last.text
+        resp = client.responses.create(
+            model="gpt-5-mini",
+            instructions=SYSTEM_PROMPT,      # keep your static system schema (cache-friendly)
+            input=user_prompt,
+            text={"verbosity":"medium",},               # your per-pair dynamic content
+            reasoning={"effort":"low"},         # concise but complete
+            max_output_tokens=1200
+        )
+        return resp.output_text
     except Exception as e:
-        print(f"❌ Gemini API call failed: {e}")
-        return "Error: Could not get analysis from Gemini."
+        print(f"❌ OpenAI API call failed: {e}")
+        return "Error: Could not get analysis from GPT-5 mini."
+
 
 def send_telegram_message(text):
     """Sends a message to a Telegram chat."""
@@ -310,11 +318,10 @@ def analyze_and_send(all_events, pair, data_fetcher, bot):
     )
     
     # 4. เรียก Gemini API
-    ai_response = call_gemini_api(user_prompt)
+    ai_response = call_gpt_api(user_prompt)
 
     time.sleep(2)
 
-    # header = f"💎 *Gemini Forex Analysis for {pair}*"
     full_message = f"{pair}\n{'-'*20}\n{ai_response}"
     send_telegram_message(full_message)
     time.sleep(4)

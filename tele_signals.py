@@ -9,39 +9,30 @@ class TyphoonForexAnalyzer:
 
     def build_prompt(self, analysis_text):
         return f"""
-        Extract the essential intraday trading plan from the following analysis. Focus on actionable information only.
+        Extract the essential intraday trading plan from the following GPT-5 analysis.
+        Output must follow the structure EXACTLY and be terse.
 
-        **ANALYSIS TO PROCESS:**
+        ANALYSIS:
         {analysis_text}
 
-        **REQUIRED OUTPUT FORMAT (STRICT ADHERENCE):**
-
+        OUTPUT FORMAT (STRICT):
         **PAIR:** [Currency Pair]
-        **DATE:** [Trading Date]  
-        **BIAS:** [Bullish/Bearish/Neutral/Range-bound] - [Ultra-brief rationale]
+        **DATE:** [Trading Date]
+        **BIAS:** [Bullish/Bearish/Neutral/Range-bound] - [≤12 words]
 
         **KEY ZONES:**
-        **SUPPORTS:** [Zone 1: Price-Source] | [Zone 2: Price-Source] (if applicable)
-        **RESISTANCES:** [Zone 1: Price-Source] | [Zone 2: Price-Source] (if applicable)
+        **SUPPORTS:** [Zone 1: Price-Source] | [Zone 2: Price-Source]
+        **RESISTANCES:** [Zone 1: Price-Source] | [Zone 2: Price-Source]
 
         **SETUPS (SAME-DAY CLOSE):**
-        🐂 **LONG SETUP:**
-        **ENTRY:** [Precise conditions - max 25 words]
-        **TP:** [Target zone with brief rationale - max 15 words]  
-        **SL:** [Stop zone with brief rationale - max 15 words]
+        🐂 **LONG SETUP:** **ENTRY:** [...] **TP:** [...] **SL:** [...]
+        🐻 **SHORT SETUP:** **ENTRY:** [...] **TP:** [...] **SL:** [...]
 
-        🐻 **SHORT SETUP:**
-        **ENTRY:** [Precise conditions - max 25 words]
-        **TP:** [Target zone with brief rationale - max 15 words]
-        **SL:** [Stop zone with brief rationale - max 15 words]  
+        **RISK ALERTS:** [≤30 words or "None"]
 
-        **RISK ALERTS:** [Critical timing/volatility warnings - max 30 words total, or "None"]
-
-        **INSTRUCTIONS:**
-        - Preserve exact price levels and technical conditions
-        - Eliminate all unnecessary words while maintaining meaning
-        - If any section lacks clear information in the analysis, state "Insufficient data"
-        - Prioritize actionability over explanation
+        Rules:
+        - Preserve numeric price levels and time windows
+        - If missing, write "Insufficient data"
         """
     
     def system_prompter(self):

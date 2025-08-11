@@ -8,7 +8,7 @@ pandas-ta
 numpy==1.26.4
 
 # --- AI & Environment ---
-google-generativeai
+openai
 python-dotenv
 
 # --- IQ Option API Dependency ---

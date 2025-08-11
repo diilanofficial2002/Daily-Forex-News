@@ -5,9 +5,7 @@ name: Run Daily Forex Analysis
 on:
   workflow_dispatch: # อนุญาตให้เรากดรันเองได้เพื่อทดสอบ
   schedule:
-    # รันตอน 12:00 UTC (ตรงกับ 19:00 หรือ 1 ทุ่มตามเวลาประเทศไทย)
-    # ทุกวันจันทร์ (1) ถึง วันศุกร์ (5)
-    - cron: '0 12 * * 1-5'
+    - cron: '0 23 * * 0-4'
 
 # กำหนดงานที่จะต้องทำ
 jobs:
@@ -42,6 +40,7 @@ jobs:
       - name: Run Forex Analysis Script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TYPHOON_API_KEY: ${{ secrets.TYPHOON_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           SIGNAL_BOT_TOKEN: ${{ secrets.SIGNAL_BOT_TOKEN }}
