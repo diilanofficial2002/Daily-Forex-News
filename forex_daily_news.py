@@ -639,7 +639,7 @@ if __name__ == '__main__':
     # print("🧭 Global Macro Baseline:", GLOBAL_MACRO)
 
     # 2. ตั้งค่าคู่เงินที่ต้องการวิเคราะห์
-    target_pairs = ["EUR/USD", "USD/JPY"] #["EUR/USD", "GBP/USD", "USD/JPY", "EUR/GBP", "EUR/CHF"]
+    target_pairs = ["EUR/USD", "GBP/USD", "USD/JPY", "EUR/GBP", "EUR/CHF"]
     
     # 3. วนลูปเพื่อวิเคราะห์และส่งข้อมูลทีละคู่เงิน
     now_ict = datetime.utcnow() + timedelta(hours=7)
