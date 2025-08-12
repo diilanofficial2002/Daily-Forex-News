@@ -595,12 +595,12 @@ def analyze_and_send(all_events, pair, data_fetcher, bot):
 
     user_prompt = format_user_prompt(ctx)
     ai_response = call_gpt_api(user_prompt)
-
+    time.sleep(2)
     full_message = f"{pair}\n{'-'*20}\n{ai_response}"
     send_telegram_message(full_message)
-    time.sleep(2)
+    time.sleep(4)
     bot.send(ai_response)
-    time.sleep(2)
+    time.sleep(5)
 
 def send_telegram_message(text):
     """Sends a message to a Telegram chat."""
