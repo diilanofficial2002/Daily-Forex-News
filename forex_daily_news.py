@@ -131,9 +131,26 @@ Operating assumptions (do not violate):
 - Do not invent data. Use only inputs provided.
 - Write in clear, concise English. Avoid emojis, filler, and disclaimers.
 - Keep headings EXACT. Keep each bullet short and action-oriented.
-- For price formatting: non-JPY pairs to 5 decimals (e.g., 1.08520), JPY pairs to 3 decimals (e.g., 148.230).
-- If required info is missing, write "Insufficient data" at that field.
+- Price formatting: non-JPY pairs to 5 decimals (e.g., 1.08520), JPY pairs to 3 decimals (e.g., 148.230).
+- Pip definition (critical for this API): quotes are 5/3 decimals, where the last digit is a pipette.
+  * For non-JPY: 1 pip = 0.00010 (penultimate decimal). pips = round(|p2 - p1| * 10000).
+  * For JPY:    1 pip = 0.010   (penultimate decimal). pips = round(|p2 - p1| * 100).
+- Every TP/SL must show both price and pip distance from ENTRY, and include RR where possible.
+- Minimum TP: prefer 30 pips (allow 25 pips if volatility is low but still feasible).
+- Enforce RR >= 1.5 (prefer >= 1.8). If RR cannot reach 1.5 given today’s structure, mark "Insufficient RR" and DO NOT propose that setup.
 - Output must fit within ~900 tokens.
+
+Volatility feasibility (no ATR provided):
+- Use Previous Day High/Low range and current H1/M15 structure as the volatility proxy.
+- A practical test: proposed TP distance should be <= 60% of the previous day's range (approx guide).
+- If the proxy suggests today's liquidity likely cannot support 25 pips TP intraday, write "Insufficient volatility" for that side.
+
+Timeframes & method:
+- H4: primary context and directional bias zones.
+- H1: structure & confirmation (trend, pullbacks, break/retest).
+- M15: entry refinement (candle behavior, momentum alignment).
+- Align with pivots/prev day H/L; confirm with EMA(20/50), RSI(14), MACD.
+- Be specific about price interaction with zones and candle behavior.
 
 Required sections and exact headings:
 1) ## OVERVIEW
@@ -150,23 +167,18 @@ Required sections and exact headings:
 
 4) ## SETUPS (SAME-DAY CLOSE)
    ### LONG
-   - Entry: [precise multi-TF condition incl. levels]
-   - TP: [...]
-   - SL: [...]
-   - Risk: [main invalidation factors]
+   - Entry: [precise H1 trigger refined on M15 incl. price level]
+   - TP: [price, +X pips, RR Y.Y]
+   - SL: [price, -X pips]
+   - Risk: [main invalidation factors or "Insufficient volatility" / "Insufficient RR"]
    ### SHORT
-   - Entry: [...]
-   - TP: [...]
-   - SL: [...]
-   - Risk: [...]
+   - Entry: [precise H1 trigger refined on M15 incl. price level]
+   - TP: [price, +X pips, RR Y.Y]
+   - SL: [price, -X pips]
+   - Risk: [main invalidation factors or "Insufficient volatility" / "Insufficient RR"]
 
 5) ## RISK ALERTS
    - [events/time-windows or structure that can flip bias; ≤40 words]
-
-Analysis method:
-- Economic events: judge timing vs current time (pre/post), currency relevance, surprise vs forecast, and spillovers to the pair.
-- Technicals: use H1 for context, M15/M5 for triggers; align with pivots/prev day H/L; confirm with EMA(20/50), RSI(14), MACD.
-- Be specific about price interaction with zones and candle behavior.
 """
 
 USER_PROMPT_TEMPLATE = """
@@ -186,9 +198,9 @@ Analyze {pair} for intraday trading on {date} (ICT).
 - OHLC (last 5): {m15_ohlc}
 - EMA20={m15_ema20}, EMA50={m15_ema50}, RSI14={m15_rsi}, MACD={m15_macd}, MACD_Hist={m15_macdh}, MACD_Signal={m15_macds}
 
-4) M5 Technicals
-- OHLC (last 5): {m5_ohlc}
-- EMA20={m5_ema20}, EMA50={m5_ema50}, RSI14={m5_rsi}, MACD={m5_macd}, MACD_Hist={m5_macdh}, MACD_Signal={m5_macds}
+4) H4 Technicals
+- OHLC (last 5): {h4_ohlc}
+- EMA20={h4_ema20}, EMA50={h4_ema50}, RSI14={h4_rsi}, MACD={h4_macd}, MACD_Hist={h4_macdh}, MACD_Signal={h4_macds}
 
 Current Time (ICT): {current_time}
 
@@ -208,18 +220,19 @@ Current Time (ICT): {current_time}
 ## SETUPS (SAME-DAY CLOSE)
 ### LONG
 - Entry: ...
-- TP: ...
-- SL: ...
+- TP: ...  (+X pips, RR Y.Y)   # show both price and pip distance from ENTRY
+- SL: ...  (-X pips)
 - Risk: ...
 ### SHORT
 - Entry: ...
-- TP: ...
-- SL: ...
+- TP: ...  (+X pips, RR Y.Y)
+- SL: ...  (-X pips)
 - Risk: ...
 
 ## RISK ALERTS
 - ...
 """
+
 
 def call_gpt_api(user_prompt: str) -> str:
     """
@@ -283,13 +296,13 @@ def analyze_and_send(all_events, pair, data_fetcher, bot):
         pair=pair,
         date=today_date,
         news_data=news_data_str,
-        h1_ohlc=tech_data["h1_ohlc"],
-        h1_ema20=tech_data["h1_ema20"],
-        h1_ema50=tech_data["h1_ema50"],
-        h1_rsi=tech_data["h1_rsi"],
-        h1_macd=tech_data["h1_macd"],
-        h1_macdh=tech_data["h1_macdh"],
-        h1_macds=tech_data["h1_macds"],
+        h4_ohlc=tech_data["h4_ohlc"],
+        h4_ema20=tech_data["h4_ema20"],
+        h4_ema50=tech_data["h4_ema50"],
+        h4_rsi=tech_data["h4_rsi"],
+        h4_macd=tech_data["h4_macd"],
+        h4_macdh=tech_data["h4_macdh"],
+        h4_macds=tech_data["h4_macds"],
         prev_day_high=tech_data["prev_day_high"],
         prev_day_low=tech_data["prev_day_low"],
         prev_day_close=tech_data["prev_day_close"],
@@ -307,13 +320,13 @@ def analyze_and_send(all_events, pair, data_fetcher, bot):
         m15_macd=tech_data["m15_macd"],
         m15_macdh=tech_data["m15_macdh"],
         m15_macds=tech_data["m15_macds"],
-        m5_ohlc=tech_data["m5_ohlc"],
-        m5_rsi=tech_data["m5_rsi"],
-        m5_ema20=tech_data["m5_ema20"],
-        m5_ema50=tech_data["m5_ema50"],
-        m5_macd=tech_data["m5_macd"],
-        m5_macdh=tech_data["m5_macdh"],
-        m5_macds=tech_data["m5_macds"],
+        h1_ohlc=tech_data["h1_ohlc"],
+        h1_rsi=tech_data["h1_rsi"],
+        h1_ema20=tech_data["h1_ema20"],
+        h1_ema50=tech_data["h1_ema50"],
+        h1_macd=tech_data["h1_macd"],
+        h1_macdh=tech_data["h1_macdh"],
+        h1_macds=tech_data["h1_macds"],
         current_time=current_time_str
     )
     

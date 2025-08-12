@@ -137,17 +137,17 @@ class IQDataFetcher:
 
         api_pair_name = pair.replace("/", "")
         
-        # 1. ดึงข้อมูล H1 และคำนวณ
+        # 1. ดึงข้อมูล H4 และคำนวณ
+        h4_candles = self._fetch_candles(api_pair_name, 14400, 100) # ดึง 100 แท่ง
+        h4_data = self._calculate_indicators(h4_candles)
+        
+        # 2. ดึงข้อมูล H1 และคำนวณ
         h1_candles = self._fetch_candles(api_pair_name, 3600, 100) # ดึง 100 แท่ง
         h1_data = self._calculate_indicators(h1_candles)
-        
-        # 2. ดึงข้อมูล M15 และคำนวณ
+
+        # 3. ดึงข้อมูล M15 และคำนวณ
         m15_candles = self._fetch_candles(api_pair_name, 900, 100) # ดึง 100 แท่ง
         m15_data = self._calculate_indicators(m15_candles)
-
-        # 3. ดึงข้อมูล M5 และคำนวณ
-        m5_candles = self._fetch_candles(api_pair_name, 300, 100) # ดึง 100 แท่ง
-        m5_data = self._calculate_indicators(m5_candles)
         
         # 4. ดึงข้อมูลแท่งเทียนรายวัน (D1) เพื่อหา Previous Day's High/Low/Close
         #    ต้องการอย่างน้อย 2 แท่ง เพื่อให้แน่ใจว่าได้แท่งที่สมบูรณ์ของวันก่อนหน้า
@@ -174,19 +174,19 @@ class IQDataFetcher:
                 prev_day_candle['close']
             )
 
-        if not h1_data or not m15_data or not m5_data: # ตรวจสอบ m5_data ด้วย
+        if not h1_data or not m15_data or not h4_data: # ตรวจสอบ m5_data ด้วย
             print(f"❌ Could not retrieve full technical data for {pair}.")
             return None
         
         # 5. ประกอบร่างข้อมูลทั้งหมดเพื่อส่งคืน
         return {
-            "h1_ohlc": h1_data['ohlc'],
-            "h1_ema20": h1_data['ema20'],
-            "h1_ema50": h1_data['ema50'],
-            "h1_rsi": h1_data['rsi'],
-            "h1_macd": h1_data['macd'], # เพิ่มใหม่
-            "h1_macdh": h1_data['macdh'], # เพิ่มใหม่
-            "h1_macds": h1_data['macds'], # เพิ่มใหม่
+            "h4_ohlc": h4_data['ohlc'],
+            "h4_ema20": h4_data['ema20'],
+            "h4_ema50": h4_data['ema50'],
+            "h4_rsi": h4_data['rsi'],
+            "h4_macd": h4_data['macd'], # เพิ่มใหม่
+            "h4_macdh": h4_data['macdh'], # เพิ่มใหม่
+            "h4_macds": h4_data['macds'], # เพิ่มใหม่
             "prev_day_high": prev_day_high,
             "prev_day_low": prev_day_low,
             "prev_day_close": prev_day_close,
@@ -204,13 +204,13 @@ class IQDataFetcher:
             "m15_macd": m15_data['macd'], # เพิ่มใหม่
             "m15_macdh": m15_data['macdh'], # เพิ่มใหม่
             "m15_macds": m15_data['macds'], # เพิ่มใหม่
-            "m5_ohlc": m5_data['ohlc'],
-            "m5_ema20": m5_data['ema20'],
-            "m5_ema50": m5_data['ema50'],
-            "m5_rsi": m5_data['rsi'],
-            "m5_macd": m5_data['macd'], # เพิ่มใหม่
-            "m5_macdh": m5_data['macdh'], # เพิ่มใหม่
-            "m5_macds": m5_data['macds'], # เพิ่มใหม่
+            "h1_ohlc": h1_data['ohlc'],
+            "h1_ema20": h1_data['ema20'],
+            "h1_ema50": h1_data['ema50'],
+            "h1_rsi": h1_data['rsi'],
+            "h1_macd": h1_data['macd'], # เพิ่มใหม่
+            "h1_macdh": h1_data['macdh'], # เพิ่มใหม่
+            "h1_macds": h1_data['macds'], # เพิ่มใหม่
         }
 
     def close_connection(self):
